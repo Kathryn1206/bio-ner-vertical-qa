@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Model weights and generated models
+Qwen/
+models/
+checkpoints/
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# Raw or private data
+faq_data/
+data/raw/
+BIO人民日报训练集.txt
+intent_data.csv
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# macOS and IDE
+.DS_Store
+.idea/
+.vscode/
+
