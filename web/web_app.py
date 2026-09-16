@@ -2,9 +2,10 @@
 import sys
 import os
 
-# 1. 配置项目主目录绝对路径（核心：先加路径，后导入模块）
-BASE_DIR = "C:/Users/31755/intent recognition"
-sys.path.append(BASE_DIR)
+# 1. 根据当前文件位置确定项目根目录
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 # 路径验证（方便排查，保留）
 print(f"✅ 已添加主目录到Python路径：{BASE_DIR}")
 print(f"✅ Python当前搜索路径：{sys.path[:3]}")

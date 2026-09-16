@@ -1,5 +1,7 @@
 from transformers import BertTokenizer, BertForTokenClassification
 import torch
+import os
+from pathlib import Path
 
 # ====================== 1. 配置参数（和训练时一致） ======================
 labels = [
@@ -16,7 +18,10 @@ max_length = 510
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ====================== 2. 加载训练好的模型和分词器 ======================
-model_path = "C:\\Users\\31755\\exam_bio_final_model"  # 训练好的模型路径
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+model_path = os.getenv(
+    "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
+)  # 训练好的模型路径
 tokenizer = BertTokenizer.from_pretrained(model_path)
 model = BertForTokenClassification.from_pretrained(model_path)
 model = model.to(device)

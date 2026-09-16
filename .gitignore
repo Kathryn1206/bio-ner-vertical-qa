@@ -9,6 +9,9 @@ env/
 Qwen/
 models/
 checkpoints/
+exam_bio_model/
+exam_bio_final_model/
+exam_bio_logs/
 *.pkl
 *.joblib
 *.pt
@@ -33,4 +36,3 @@ intent_data.csv
 .DS_Store
 .idea/
 .vscode/
-

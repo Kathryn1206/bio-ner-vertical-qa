@@ -8,13 +8,20 @@ import glob
 import re
 import json
 import joblib
+from pathlib import Path
 
 LAST_EXAM = None   # 全局变量：用于指代消解
 warnings.filterwarnings("ignore")
-# ===================== 1. 配置参数（根据你的实际路径修改） =====================
-BIO_MODEL_PATH = "C:/Users/31755/exam_bio_final_model"  # BIO模型路径
-EXCEL_FOLDER = "C:/Users/31755/intent recognition/faq_data" 
-INTENT_MODEL_PATH = "C:/Users/31755/intent recognition/核心模型算法/intent_model.pkl"  # 意图识别模型路径
+# ===================== 1. 配置参数 =====================
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BIO_MODEL_PATH = os.getenv(
+    "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
+)
+EXCEL_FOLDER = os.getenv("FAQ_DATA_DIR", str(PROJECT_ROOT / "faq_data"))
+INTENT_MODEL_PATH = os.getenv(
+    "INTENT_MODEL_PATH", str(PROJECT_ROOT / "核心模型算法" / "intent_model.pkl")
+)
+QWEN_MODEL_PATH = os.getenv("QWEN_MODEL_PATH", str(PROJECT_ROOT / "Qwen"))
 
 # 全局设备配置
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,8 +83,8 @@ def predict_intent(text):
 
 #====================== 2.3 加载千问模型======================
 def load_local_qwen():
-    # 本地Qwen-1.8B的路径（你提供的路径）
-    local_qwen_path = "C:/Users/31755/intent recognition/Qwen"
+    # 本地Qwen-1.8B路径，可通过环境变量 QWEN_MODEL_PATH 覆盖
+    local_qwen_path = QWEN_MODEL_PATH
     
     # 加载千问分词器（用本地路径，不重新下载）
     qwen_tokenizer = AutoTokenizer.from_pretrained(
@@ -92,7 +99,7 @@ def load_local_qwen():
     qwen_model = AutoModelForCausalLM.from_pretrained(
         local_qwen_path,
         torch_dtype=torch.float16,  # 1.8B用float16足够，显存约3-4GB
-        device_map="auto",  # 自动用你的4060 GPU
+        device_map="auto",  # 自动使用可用的计算设备
         low_cpu_mem_usage=True,
         trust_remote_code=True
     ).eval()  # 预测模式，不训练

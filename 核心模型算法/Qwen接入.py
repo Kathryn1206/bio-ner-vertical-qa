@@ -4,7 +4,10 @@ from transformers import BertTokenizer, BertForTokenClassification, AutoModelFor
 from fuzzywuzzy import process
 import numpy as np
 import os
-model_name = r"C:/Users/31755/intent recognition/Qwen"
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+model_name = os.getenv("QWEN_MODEL_PATH", str(PROJECT_ROOT / "Qwen"))
 device = "cuda" if torch.cuda.is_available() else "cpu"  # 检测GPU
 print(f"已加载至: {device}")
 

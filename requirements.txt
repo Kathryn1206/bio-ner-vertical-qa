@@ -1,0 +1,14 @@
+accelerate
+einops
+Flask
+fuzzywuzzy
+joblib
+numpy
+openpyxl
+pandas
+python-Levenshtein
+scikit-learn
+tiktoken
+torch
+transformers
+transformers-stream-generator
