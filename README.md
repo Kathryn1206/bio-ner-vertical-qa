@@ -1,8 +1,17 @@
 # Constraint-Aware BIO-NER Pipeline for Vertical-Domain Question Answering
 
-[![Syntax check](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml)
+**A retrieval-first Chinese exam-support assistant for fuzzy, context-dependent registration questions.** It combines BIO-NER, intent routing, conversational context, and exam-scoped FAQ retrieval, invoking a constrained local Qwen model only when curated knowledge cannot answer.
 
-A sanitized source release of a six-day industry prototype for Chinese exam-registration support. The system combines deterministic routing, BERT-based BIO entity recognition, intent classification, knowledge-base retrieval, conversational context, and a constrained local Qwen fallback.
+[![Syntax check](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml)
+[![License: review only](https://img.shields.io/badge/license-review%20only-lightgrey.svg)](LICENSE)
+
+<p align="center">
+  <img src="docs/demo-ui.svg" alt="Local Flask chat interface with a Chinese exam-registration query entered" width="820">
+</p>
+
+<p align="center"><em>Local Flask interface with an example query entered but not submitted. Answer generation requires the local FAQ and model artifacts excluded from this repository.</em></p>
+
+Developed during a one-month industry internship, this repository is a sanitized source release of the resulting Chinese exam-registration support prototype.
 
 The main design goal is to reduce hallucination in a high-precision information service: verified FAQ answers are preferred over free-form generation, and the language model is used only when deterministic retrieval cannot resolve a query.
 
@@ -14,7 +23,7 @@ The main design goal is to reduce hallucination in a high-precision information 
 
 **Implemented scope.** This repository contains the end-to-end prototype: a domain BIO label scheme and training pipeline, a TF-IDF intent classifier, alias and priority rules, conversational entity carry-over, exam-scoped FAQ matching, a constrained Qwen fallback, and a Flask interface.
 
-**Evaluation status.** No benchmark metric is reported in this release. The original private data and trained artifacts are excluded, so accuracy, entity-level F1, and hallucination-reduction claims would not currently be reproducible. The next evaluation step is an independently annotated held-out set measuring entity precision/recall/F1, intent macro-F1, retrieval accuracy and coverage, unsupported-answer rate, and latency, together with ablations of the rule, context, and fallback stages.
+**Evaluation status.** No benchmark metric is reported in this release. The original private data and trained artifacts are excluded, so accuracy, entity-level F1, and hallucination-reduction claims would not currently be reproducible. The planned validation work is listed in the roadmap below.
 
 ### Code review map
 
@@ -25,6 +34,15 @@ The main design goal is to reduce hallucination in a high-precision information 
 | Intent data and classifier training | [`experiments/generate_intent_data.py`](experiments/generate_intent_data.py), [`experiments/train_intent_classifier.py`](experiments/train_intent_classifier.py) |
 | Baselines and model probes | [`experiments/zero_shot_intent_baseline.py`](experiments/zero_shot_intent_baseline.py), [`experiments/bio_model_inference_demo.py`](experiments/bio_model_inference_demo.py) |
 | Local demonstration interface | [`web/web_app.py`](web/web_app.py) |
+
+## Roadmap
+
+- [ ] Build an independently annotated, de-identified held-out evaluation set.
+- [ ] Report entity-level precision, recall, and F1, together with intent macro-F1.
+- [ ] Measure retrieval accuracy, knowledge-base coverage, unsupported-answer rate, and end-to-end latency.
+- [ ] Compare the hybrid pipeline with retrieval-only and unconstrained-generation baselines.
+- [ ] Run ablations for alias rules, conversational context, exam scoping, and the Qwen fallback.
+- [ ] Rebuild the reference environment from a clean machine and publish a validated lockfile.
 
 ## System architecture
 
@@ -70,6 +88,8 @@ This is a prototype rather than a production guarantee. A generative fallback ca
 bio-ner-vertical-qa/
 ├── .github/workflows/
 │   └── syntax-check.yml             # Dependency-free Python syntax CI
+├── docs/
+│   └── demo-ui.svg                   # Portfolio-facing interface preview
 ├── exam_chat_core/
 │   ├── __init__.py
 │   └── core_code.py                 # Integrated routing and QA pipeline
@@ -84,6 +104,7 @@ bio-ner-vertical-qa/
 │   ├── zero_shot_intent_baseline.py      # Zero-shot intent baseline
 │   └── integrated_pipeline_prototype.py  # Earlier integrated prototype
 ├── .env.example                     # Safe local configuration template
+├── LICENSE                           # Portfolio-review notice; no reuse license
 ├── requirements.txt
 └── .gitignore
 ```
@@ -173,7 +194,7 @@ For an NVIDIA machine, first use the [official PyTorch installation selector](ht
 pip install -r requirements.txt
 ```
 
-The original internship environment was not preserved as a lockfile. `requirements.txt` records the required packages, while the bundled documentation of a locally supplied Qwen model should take priority if it requires a specific `transformers` version.
+The original internship environment was not preserved as a lockfile. `requirements.txt` now records conservative compatibility ranges for Python 3.10 rather than unconstrained package names. The legacy Qwen-1.8B custom-code path is intentionally limited to the Transformers 4.32 release line and `transformers-stream-generator` 0.0.4 release line, following the model's [original dependency guidance](https://huggingface.co/Qwen/Qwen-1_8B-Chat#dependency). These ranges improve repeatability but are not a substitute for a lockfile validated on a clean machine.
 
 ### 5. Supply the excluded artifacts
 
@@ -314,4 +335,4 @@ This repository preserves an internship MVP and its experimental scripts. It is 
 
 ## Use and licensing
 
-This repository is published for portfolio review and research discussion. No open-source license is granted at present; public visibility alone does not grant permission to copy, modify, or redistribute the code or excluded artifacts.
+This repository is source-available for portfolio review and research discussion only; it is not open-source software. You may inspect the code to evaluate the work, but no permission is granted to use, copy, modify, distribute, deploy, sublicense, or create derivative works. Public visibility does not grant rights to the code, private data, trained artifacts, or third-party components. See [`LICENSE`](LICENSE) for the full notice.
