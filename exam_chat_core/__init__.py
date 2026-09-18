@@ -1,19 +1,18 @@
-# exam_chat_core/__init__.py 完整代码（直接覆盖原文件）
 from .core_code import (
-    # 核心问答函数
+    # Core question-answering interface
     get_answer_from_exam_db,
-    # 初始化函数
+    # Resource loaders
     load_bio_model,
     load_intent_model,
     load_local_qwen,
     load_exam_database_from_folder,
-    # 配置路径（与core_code.py保持一致）
+    # Shared configuration paths
     BIO_MODEL_PATH,
     EXCEL_FOLDER,
     INTENT_MODEL_PATH
 )
 
-# 全局初始化函数（加载所有模型/Excel，仅启动时执行一次）
+# Load all models and FAQ files once during application startup.
 def init_exam_chat():
     import sys
     from .core_code import (
@@ -21,21 +20,21 @@ def init_exam_chat():
         intent_classifier, bio_tokenizer, bio_model, bio_id_to_label,
         qwen_model, qwen_tokenizer
     )
-    # 声明全局变量，确保后续调用可使用
+    # Expose the initialized resources to subsequent calls.
     global exam_question_map, question_answer_map, exam_keywords
     global intent_classifier, bio_tokenizer, bio_model, bio_id_to_label
     global qwen_model, qwen_tokenizer
 
-    # 按顺序加载资源
-    print("📂 加载Excel数据库...")
+    # Load resources in dependency order.
+    print("Loading the Excel knowledge base...")
     exam_question_map, question_answer_map, exam_keywords = load_exam_database_from_folder(EXCEL_FOLDER)
-    print("🤖 加载意图模型...")
+    print("Loading the intent classifier...")
     intent_classifier = load_intent_model()
-    print("🔍 加载BIO实体识别模型...")
+    print("Loading the BIO entity-recognition model...")
     bio_tokenizer, bio_model, bio_id_to_label = load_bio_model()
-    print("💬 加载Qwen大模型...")
+    print("Loading the local Qwen model...")
     qwen_model, qwen_tokenizer = load_local_qwen()
-    print("✅ 核心系统初始化完成！")
+    print("Core system initialization complete.")
 
-# 对外暴露的接口（仅保留这2个，简化调用）
+# Keep the package-level public API intentionally small.
 __all__ = ["init_exam_chat", "get_answer_from_exam_db"]
