@@ -29,6 +29,7 @@ intent_data.csv
 # Secrets
 .env
 .env.*
+!.env.example
 *.key
 *.pem
 

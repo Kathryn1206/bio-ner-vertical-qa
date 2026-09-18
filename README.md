@@ -1,8 +1,30 @@
 # Constraint-Aware BIO-NER Pipeline for Vertical-Domain Question Answering
 
+[![Syntax check](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml)
+
 A sanitized source release of a six-day industry prototype for Chinese exam-registration support. The system combines deterministic routing, BERT-based BIO entity recognition, intent classification, knowledge-base retrieval, conversational context, and a constrained local Qwen fallback.
 
 The main design goal is to reduce hallucination in a high-precision information service: verified FAQ answers are preferred over free-form generation, and the language model is used only when deterministic retrieval cannot resolve a query.
+
+## Research snapshot
+
+**Problem.** Chinese exam-support queries contain abbreviations, fuzzy wording, omitted context, and closely related intents. A purely generative system may answer fluently while inventing dates, links, or eligibility rules.
+
+**Research question.** Can a retrieval-first hybrid NLU pipeline improve answer control by resolving entities and intent before allowing a local language model to generate a fallback response?
+
+**Implemented scope.** This repository contains the end-to-end prototype: a domain BIO label scheme and training pipeline, a TF-IDF intent classifier, alias and priority rules, conversational entity carry-over, exam-scoped FAQ matching, a constrained Qwen fallback, and a Flask interface.
+
+**Evaluation status.** No benchmark metric is reported in this release. The original private data and trained artifacts are excluded, so accuracy, entity-level F1, and hallucination-reduction claims would not currently be reproducible. The next evaluation step is an independently annotated held-out set measuring entity precision/recall/F1, intent macro-F1, retrieval accuracy and coverage, unsupported-answer rate, and latency, together with ablations of the rule, context, and fallback stages.
+
+### Code review map
+
+| Review target | Evidence |
+|---|---|
+| Integrated NLU and response routing | [`exam_chat_core/core_code.py`](exam_chat_core/core_code.py) |
+| BIO-NER data construction and fine-tuning | [`experiments/train_bio_ner.py`](experiments/train_bio_ner.py) |
+| Intent data and classifier training | [`experiments/generate_intent_data.py`](experiments/generate_intent_data.py), [`experiments/train_intent_classifier.py`](experiments/train_intent_classifier.py) |
+| Baselines and model probes | [`experiments/zero_shot_intent_baseline.py`](experiments/zero_shot_intent_baseline.py), [`experiments/bio_model_inference_demo.py`](experiments/bio_model_inference_demo.py) |
+| Local demonstration interface | [`web/web_app.py`](web/web_app.py) |
 
 ## System architecture
 
@@ -46,6 +68,8 @@ This is a prototype rather than a production guarantee. A generative fallback ca
 
 ```text
 bio-ner-vertical-qa/
+├── .github/workflows/
+│   └── syntax-check.yml             # Dependency-free Python syntax CI
 ├── exam_chat_core/
 │   ├── __init__.py
 │   └── core_code.py                 # Integrated routing and QA pipeline
@@ -59,6 +83,7 @@ bio-ner-vertical-qa/
 │   ├── qwen_inference_demo.py            # Local Qwen inference experiment
 │   ├── zero_shot_intent_baseline.py      # Zero-shot intent baseline
 │   └── integrated_pipeline_prototype.py  # Earlier integrated prototype
+├── .env.example                     # Safe local configuration template
 ├── requirements.txt
 └── .gitignore
 ```
@@ -185,6 +210,8 @@ No configuration is needed when the default layout is used. Otherwise, set any o
 | `FLASK_DEBUG` | `false` | Enables Flask debug mode only when set to `true` |
 | `AUTO_OPEN_BROWSER` | `true` | Opens the local chat page after startup |
 
+The repository includes [`.env.example`](.env.example) as a safe configuration reference. The application reads process environment variables and does not load `.env` files automatically.
+
 macOS or Linux example:
 
 ```bash
@@ -284,3 +311,7 @@ The included generators use template-based synthetic examples. For research-grad
 ## Current status
 
 This repository preserves an internship MVP and its experimental scripts. It is intended as a transparent portfolio and research artifact, not as a deployed public-information service. The private data and trained artifacts used during development are not part of this release, and no benchmark result is claimed without a reproducible evaluation set.
+
+## Use and licensing
+
+This repository is published for portfolio review and research discussion. No open-source license is granted at present; public visibility alone does not grant permission to copy, modify, or redistribute the code or excluded artifacts.
