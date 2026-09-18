@@ -1,15 +1,12 @@
-# generate_intent_data.py
-# ===============================
-# 自动生成更真实的 Intent 训练数据（text,label）
-# ===============================
+# Generate synthetic Chinese intent-classification examples (text, label).
 
 import csv
 import random
 
 OUTPUT_FILE = "intent_data.csv"
-SAMPLES_PER_INTENT = 120   # ⭐ 每个 intent 生成多少条（可调）
+SAMPLES_PER_INTENT = 120   # Configurable examples per intent.
 
-# ========= 1️⃣ 基础词库 =========
+# 1. Domain vocabulary
 
 EXAMS = [
     "二建", "二级建造师",
@@ -24,7 +21,7 @@ SUFFIXES = [
     "", "啊", "呀", "呢", "可以吗", "怎么办"
 ]
 
-# ========= 2️⃣ Intent 模板 =========
+# 2. Intent templates
 
 INTENT_PATTERNS = {
     "报名时间": [
@@ -70,7 +67,7 @@ INTENT_PATTERNS = {
     ]
 }
 
-# ========= 3️⃣ 生成函数 =========
+# 3. Sentence generation
 
 def generate_sentence(pattern, intent):
     exam = random.choice(EXAMS) if "{exam}" in pattern else ""
@@ -79,7 +76,7 @@ def generate_sentence(pattern, intent):
 
     sentence = pattern.format(exam=exam)
 
-    # 前后随机拼接
+    # Add optional conversational prefixes and suffixes.
     if prefix:
         sentence = prefix + sentence
     if suffix:
@@ -88,7 +85,7 @@ def generate_sentence(pattern, intent):
     return sentence.strip()
 
 
-# ========= 4️⃣ 主生成逻辑 =========
+# 4. Generate the dataset
 
 rows = []
 
@@ -98,14 +95,14 @@ for intent, patterns in INTENT_PATTERNS.items():
         text = generate_sentence(pattern, intent)
         rows.append((text, intent))
 
-# 打乱顺序
+# Shuffle the generated examples.
 random.shuffle(rows)
 
-# ========= 5️⃣ 写入 CSV =========
+# 5. Write the CSV file
 
 with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["text", "label"])
     writer.writerows(rows)
 
-print(f"✅ 已生成 {len(rows)} 条 Intent 数据 → {OUTPUT_FILE}")
+print(f"Generated {len(rows)} intent examples -> {OUTPUT_FILE}")

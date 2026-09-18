@@ -53,15 +53,15 @@ tokenizer = BertTokenizer.from_pretrained(model_name)
 model = BertForTokenClassification.from_pretrained(model_name, num_labels=len(labels))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
-print(f'模型已加载至{device}')
-max_length = 510  # BERT最大输入长度512，留出[CLS]和[SEP]位置
+print(f'Model loaded on: {device}')
+max_length = 510  # Reserve two positions in BERT's 512-token limit for CLS and SEP.
 
-#长文本处理函数
+# Split long text into BERT-compatible chunks.
 def process_long_text(long_text, long_labels=None, max_length=510):
     text_chars = list(long_text)
-    total_chars = len(text_chars) # 长文本拆分成单字
-    chunks = [] # 分段后文字列表
-    label_chunks = [] #分段后标签列表
+    total_chars = len(text_chars)
+    chunks = []
+    label_chunks = []
     encoded_chunks = []
     processed_labels = []
     raw_chunks = []
@@ -69,14 +69,14 @@ def process_long_text(long_text, long_labels=None, max_length=510):
 
     for i in range(0, total_chars, max_length):
         chunk = text_chars[i:i+max_length]
-        chunks.append(chunk) #切文本
-        if long_labels is not None:  # 切标签
+        chunks.append(chunk)
+        if long_labels is not None:
             label_chunk = long_labels[i:i+max_length]
-            if len(label_chunk) < max_length: #补齐标签
+            if len(label_chunk) < max_length:  # Pad the final label chunk.
                 label_chunk += ['O'] * (max_length - len(label_chunk))
             label_chunks.append(label_chunk)
 
-    # 对每个文本段进行BERT编码
+    # Encode each chunk independently.
     for chunk in chunks:
         encoding =tokenizer(
             chunk,
@@ -84,7 +84,7 @@ def process_long_text(long_text, long_labels=None, max_length=510):
             return_tensors='pt',
             padding = 'max_length',
             truncation = True,
-            max_length=min(max_length + 2, 512)    #考虑[CLS]和[SEP],强制限制512以内
+            max_length=min(max_length + 2, 512)  # Include CLS and SEP without exceeding 512.
         )
         encoded_chunks.append({
                 'input_ids': encoding['input_ids'].squeeze(0), 
@@ -92,36 +92,36 @@ def process_long_text(long_text, long_labels=None, max_length=510):
             })
 
     
-    # 处理标签段
+    # Convert BIO labels to training IDs.
     if long_labels is not None:
-         for idx, label_chunk in enumerate(label_chunks):  # 枚举遍历
-            label_ids = [label_to_id[l] for l in label_chunk]  # 转数字
-            label_ids = [-100] + label_ids + [-100]  # 给 [CLS] 和 [SEP] 添加 -100
-            processed_labels.append(torch.tensor(label_ids))  # 转张量
+         for idx, label_chunk in enumerate(label_chunks):
+            label_ids = [label_to_id[l] for l in label_chunk]
+            label_ids = [-100] + label_ids + [-100]  # Ignore CLS and SEP in the loss.
+            processed_labels.append(torch.tensor(label_ids))
 
     return encoded_chunks, processed_labels, chunks
 
-#长文本预测函数
+# Run token classification over one or more chunks.
 def predict_long_text(long_text, max_length = 510):
     encoded_chunks, _, text_chunks = process_long_text(long_text, None, max_length=max_length)
-    all_pred_labels = [] # 存储所有预测标签
-    id_to_label = {i: label for label, i in label_to_id.items()} # 数字标签转回文本标签
+    all_pred_labels = []
+    id_to_label = {i: label for label, i in label_to_id.items()}
     model.eval()
-    with torch.no_grad():  # 关闭梯度，节省资源
-        for encoded in encoded_chunks: # 遍历每个文本段
-            outputs = model( 
-                input_ids=encoded["input_ids"].unsqueeze(0).to(device),  # 加batch维度
+    with torch.no_grad():
+        for encoded in encoded_chunks:
+            outputs = model(
+                input_ids=encoded["input_ids"].unsqueeze(0).to(device),  # Add the batch dimension.
                 attention_mask=encoded["attention_mask"].unsqueeze(0).to(device)
             )
-            pred_ids = torch.argmax(outputs.logits, dim=-1).squeeze().cpu().tolist()# 取预测结果（去掉[CLS]和[SEP]）
-            pred_labels = [id_to_label[id] for id in pred_ids][1:-1]  # 去掉首尾的[CLS]/[SEP]
+            pred_ids = torch.argmax(outputs.logits, dim=-1).squeeze().cpu().tolist()
+            pred_labels = [id_to_label[id] for id in pred_ids][1:-1]  # Remove CLS and SEP labels.
             all_pred_labels.extend(pred_labels)
-    all_pred_labels = all_pred_labels[:len(list(long_text))]  # 截断多余部分
+    all_pred_labels = all_pred_labels[:len(list(long_text))]
     return list(long_text), all_pred_labels
 
 
 
-#考试提问bio编码自动生成
+# Generate character-level BIO labels for synthetic exam questions.
 def bio_tag_sentence(sentence, entities):
     labels = []
     i = 0
@@ -176,10 +176,10 @@ def generate_dataset():
 
     return dataset
 
-# 自定义数据集类（适配你的长文本处理+标签格式）
+# Dataset wrapper for the chunked text and BIO-label format.
 class ExamBIODataset(Dataset):
     def __init__(self, data, tokenizer, label_to_id, max_length=510):
-        self.data = data  # 格式：[(sentence, labels), ...]
+        self.data = data  # Expected format: [(sentence, labels), ...]
         self.tokenizer = tokenizer
         self.label_to_id = label_to_id
         self.max_length = max_length
@@ -190,14 +190,14 @@ class ExamBIODataset(Dataset):
     def __getitem__(self, idx):
         sentence, labels = self.data[idx]
         
-        # 调用你的长文本处理函数（兼容长短文本）
+        # Use the same preprocessing path for short and long inputs.
         encoded_chunks, processed_labels, _ = process_long_text(
             long_text=sentence,
             long_labels=labels,
             max_length=self.max_length
         )
         
-        # 取第一个chunk（考试提问都是短文本，不会超过510）
+        # Synthetic exam questions fit in the first chunk.
         encoded = encoded_chunks[0]
         label_ids = processed_labels[0]
         
@@ -207,12 +207,12 @@ class ExamBIODataset(Dataset):
             "labels": label_ids
         }
 
-# 评估指标函数（训练中监控F1/准确率）
+# Compute token-level accuracy and F1 metrics during training.
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
     
-    # 过滤-100（[CLS]/[SEP]的标签）
+    # Exclude ignored CLS, SEP, and padding positions.
     true_labels = []
     true_predictions = []
     for pred_row, label_row in zip(predictions, labels):
@@ -221,7 +221,7 @@ def compute_metrics(eval_pred):
                 true_labels.append(id_to_label[l])
                 true_predictions.append(id_to_label[p])
     
-    # 计算核心指标
+    # Calculate the reported metrics.
     from sklearn.metrics import classification_report
     report = classification_report(
     true_labels,
@@ -235,46 +235,46 @@ def compute_metrics(eval_pred):
         "f1_weighted": report["weighted avg"]["f1-score"]
     }
 
-# 训练主函数
+# Train and save the BIO token classifier.
 def train_model():
-    # 1. 生成BIO数据集
-    print("===== 生成考试提问BIO数据集 =====")
+    # 1. Generate the synthetic BIO dataset.
+    print("===== Generating the exam-question BIO dataset =====")
     raw_dataset = generate_dataset()
-    print(f"数据集总数：{len(raw_dataset)} 条")
-    print("示例数据：", raw_dataset[0])  # 验证生成结果
-    
-    # 2. 拆分训练集/验证集（8:2）
+    print(f"Dataset size: {len(raw_dataset)}")
+    print("Example:", raw_dataset[0])
+
+    # 2. Split training and validation data (80/20).
     train_size = int(0.8 * len(raw_dataset))
     train_data = raw_dataset[:train_size]
     val_data = raw_dataset[train_size:]
     
-    # 3. 构建数据集
+    # 3. Build dataset objects.
     train_dataset = ExamBIODataset(train_data, tokenizer, label_to_id, max_length)
     val_dataset = ExamBIODataset(val_data, tokenizer, label_to_id, max_length)
     
-    # 4. 配置训练参数
+    # 4. Configure training.
     training_args = TrainingArguments(
-        output_dir="./exam_bio_model",  # 模型保存路径
-        num_train_epochs=10,            # 训练轮数（短文本数据集10轮足够）
-        per_device_train_batch_size=8,  # 批次大小
-        per_device_eval_batch_size=8,   # 验证批次大小
-        learning_rate=2e-5,             # 学习率（BERT最优区间）
-        logging_dir="./exam_bio_logs",  # 日志路径
-        logging_steps=50,               # 每50步打印日志
-        evaluation_strategy="epoch",    # 每个epoch评估一次
-        save_strategy="epoch",          # 每个epoch保存模型
-        load_best_model_at_end=True,    # 训练结束加载最优模型
-        metric_for_best_model="f1_macro",  # 按F1选最优模型
-        fp16=True,                      # 混合精度训练
-        report_to="none",               # 不使用wandb
-        remove_unused_columns=False,    # 保留自定义字段
-        no_cuda=False,                  # 强制使用GPU
-        dataloader_pin_memory=False,    # 关闭pin_memory避免部分环境报错
-        dataloader_num_workers=0,     # 关闭多线程避免部分环境报错 
-        gradient_accumulation_steps=4   # 累积梯度
+        output_dir="./exam_bio_model",  # Intermediate checkpoints
+        num_train_epochs=10,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=8,
+        learning_rate=2e-5,
+        logging_dir="./exam_bio_logs",
+        logging_steps=50,
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        metric_for_best_model="f1_macro",
+        fp16=True,
+        report_to="none",
+        remove_unused_columns=False,
+        no_cuda=False,
+        dataloader_pin_memory=False,
+        dataloader_num_workers=0,
+        gradient_accumulation_steps=4
 )
-    
-    # 5. 构建Trainer并训练
+
+    # 5. Build the Trainer and start training.
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -283,24 +283,23 @@ def train_model():
         compute_metrics=compute_metrics
     )
     
-    # 执行训练
-    print("===== 开始训练 =====")
+    print("===== Starting training =====")
     trainer.train()
     
-    # 6. 保存最终模型
-    print("===== 训练完成，保存模型 =====")
+    # 6. Save the final model.
+    print("===== Training complete; saving the model =====")
     model.save_pretrained("./exam_bio_final_model")
     tokenizer.save_pretrained("./exam_bio_final_model")
     
-    # 7. 测试预测（验证效果）
+    # 7. Run a quick inference check.
     test_sentence = "今年英语四级报名截止时间是什么"
     chars, pred_labels = predict_long_text(test_sentence)
-    print(f"\n测试句子：{test_sentence}")
-    print("BIO标注结果：")
+    print(f"\nTest sentence: {test_sentence}")
+    print("BIO labels:")
     for char, label in zip(chars, pred_labels):
         print(f"{char}\t{label}")
 
-# 启动训练
+# Command-line entry point
 if __name__ == "__main__":
     train_model()
 

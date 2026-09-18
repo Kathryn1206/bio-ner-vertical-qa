@@ -10,9 +10,9 @@ import json
 import joblib
 from pathlib import Path
 
-LAST_EXAM = None   # 全局变量：用于指代消解
+LAST_EXAM = None   # Conversation state for resolving omitted exam references.
 warnings.filterwarnings("ignore")
-# ===================== 1. 配置参数 =====================
+# 1. Configuration
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BIO_MODEL_PATH = os.getenv(
     "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
@@ -23,23 +23,22 @@ INTENT_MODEL_PATH = os.getenv(
 )
 QWEN_MODEL_PATH = os.getenv("QWEN_MODEL_PATH", str(PROJECT_ROOT / "Qwen"))
 
-# 全局设备配置
+# Shared inference device
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ===================== 配置：无法回答问题的处理方式 =====================
-# True: 使用固定回复（更快，但回复固定）
-# False: 接入Qwen生成回复（更灵活，但需要调用模型）
+# Unanswered-query behavior:
+# True returns a fixed response; False delegates to the local Qwen model.
 USE_FIXED_REPLY_FOR_UNANSWERED = False
 
 
-# ===================== 2.1. 加载BIO模型（适配你的考试实体识别） =====================
+# 2.1. BIO entity-recognition model
 def load_bio_model():
     labels = ['O', 'B-EXAM', 'I-EXAM', 'B-SUBJECT', 'I-SUBJECT',
         'B-TIME', 'I-TIME', 'B-ACTION', 'I-ACTION',
         'B-CONSTRAINT', 'I-CONSTRAINT', 'B-CITY', 'I-CITY']
     id_to_label = {i: label for i, label in enumerate(labels)}
     
-    # 加载模型和分词器
+    # Load the locally trained tokenizer and token classifier.
     tokenizer = BertTokenizer.from_pretrained(BIO_MODEL_PATH)
     model = BertForTokenClassification.from_pretrained(BIO_MODEL_PATH)
     model = model.to(DEVICE)
@@ -49,44 +48,43 @@ def load_bio_model():
 
 bio_tokenizer, bio_model, bio_id_to_label = load_bio_model()
 
-# ======================= 2.1 加载意图识别模型 =======================
+# 2.2. Intent classifier
 def load_intent_model():
     try:
-        print(f"📂 正在加载意图模型: {INTENT_MODEL_PATH}")
+        print(f"Loading the intent model: {INTENT_MODEL_PATH}")
         model = joblib.load(INTENT_MODEL_PATH)
-        print("✅ 意图模型加载成功")
+        print("Intent model loaded successfully.")
         return model
     except Exception as e:
-        print(f"❌ 加载意图模型失败: {e}")
+        print(f"Failed to load the intent model: {e}")
         return None
 
 
-# ======================= 初始化意图模型=======================
+# Initialize the intent classifier once at import time.
 
 intent_classifier = load_intent_model()
 
 
 
-#======================= 2.2 加载意图识别模型=======================
 def predict_intent(text):
     if intent_classifier:
         try:
-            # 模型预测返回的是你在 train_intent.py 里定义的 label
+            # Labels are defined by the intent-training dataset.
             label = intent_classifier.predict([text])[0]
             return label
         except Exception as e:
-            print(f"意图预测出错: {e}")
+            print(f"Intent prediction failed: {e}")
             return None
     return None
 
 
 
-#====================== 2.3 加载千问模型======================
+# 2.3. Local Qwen model
 def load_local_qwen():
-    # 本地Qwen-1.8B路径，可通过环境变量 QWEN_MODEL_PATH 覆盖
+    # QWEN_MODEL_PATH can override the project-relative default.
     local_qwen_path = QWEN_MODEL_PATH
     
-    # 加载千问分词器（用本地路径，不重新下载）
+    # Load the tokenizer from the configured local directory.
     qwen_tokenizer = AutoTokenizer.from_pretrained(
         local_qwen_path,
         trust_remote_code=True,
@@ -95,22 +93,22 @@ def load_local_qwen():
     qwen_tokenizer.chat_template = "{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}"
 
     
-    # 加载千问模型（1.8B显存占用低，不用量化，直接跑）
+    # Load the 1.8B model directly in FP16; quantization is not required here.
     qwen_model = AutoModelForCausalLM.from_pretrained(
         local_qwen_path,
-        torch_dtype=torch.float16,  # 1.8B用float16足够，显存约3-4GB
-        device_map="auto",  # 自动使用可用的计算设备
+        torch_dtype=torch.float16,  # Approximately 3-4 GB of VRAM for this model.
+        device_map="auto",  # Select available compute devices automatically.
         low_cpu_mem_usage=True,
         trust_remote_code=True
-    ).eval()  # 预测模式，不训练
+    ).eval()  # Inference mode
     qwen_model.generation_config.stream_generator = False #
-    print("✅ 本地Qwen-1.8B加载完成！")
+    print("Local Qwen-1.8B model loaded successfully.")
     return qwen_model, qwen_tokenizer
-# 调用函数加载本地千问（只运行一次）
+# Initialize the language model once at import time.
 qwen_model, qwen_tokenizer = load_local_qwen()
 
 
-# ===================== 2.3.1 新增：Qwen对话函数（缺失会导致报错） =====================
+# 2.3.1. Qwen generation helper
 def qwen_chat(prompt, max_new_tokens=200):
     messages = [{"role": "user", "content": prompt}]
     text = qwen_tokenizer.apply_chat_template(
@@ -141,21 +139,21 @@ def qwen_chat(prompt, max_new_tokens=200):
         generated_ids, skip_special_tokens=True
     )[0].strip()
 
-    # 1️⃣ 如果有明显“废话模板”，只截到第一句
+    # Stop before common filler phrases.
     for stop_word in ["不断", "尝试", "探索", "提升", "能力", "学习"]:
         if stop_word in response:
             response = response.split(stop_word)[0].strip("。；; ")
 
-    # 2️⃣ 去掉多余空行
+    # Collapse repeated blank lines.
     response = re.sub(r"\n+", "\n", response)
 
-    # 3️⃣ 最终兜底：只保留前 50 字（政务安全阈值）
+    # Enforce a short fallback response for this public-service use case.
     response = response[:50]
 
     return response
 
 def handle_unanswered_question(user_input, context=""):
-    """处理无法回答的问题，根据配置选择固定回复或Qwen生成"""
+    """Return either a fixed fallback or a constrained Qwen response."""
     if USE_FIXED_REPLY_FOR_UNANSWERED:
         return "抱歉，该问题暂无相关信息，建议您关注官方公告或联系客服咨询。"
     else:
@@ -177,28 +175,26 @@ def handle_unanswered_question(user_input, context=""):
         return qwen_chat(prompt)
 
 
-# ===================== 3. 加载Excel数据库（适配你的列：考试名称、分类、问题、答案） =====================
+# 3. Excel knowledge-base loader
 def load_exam_database_from_folder(folder_path):
-    """
-    从指定文件夹加载所有 .xlsx 文件，合并为统一的知识库
-    """
-    # 初始化全局映射
-    exam_question_map = {}      # {考试名称: [问题列表]}
-    question_answer_map = {}    # {问题: 答案}
-    exam_keywords = set()       # 所有考试名称（用 set 避免重复）
+    """Load all .xlsx files in a folder into a unified FAQ knowledge base."""
+    # Maps retain the original Chinese exam, question, and answer text.
+    exam_question_map = {}      # {exam_name: [questions]}
+    question_answer_map = {}    # {question: answer}
+    exam_keywords = set()       # Unique exam names
 
-    # 获取文件夹中所有 .xlsx 文件
+    # Discover all FAQ workbooks in the configured folder.
     excel_files = glob.glob(os.path.join(folder_path, "*.xlsx"))
     
     if not excel_files:
-        print(f"⚠️ 警告：文件夹 {folder_path} 中没有找到 .xlsx 文件！")
+        print(f"Warning: no .xlsx files were found in {folder_path}.")
         return {}, {}, []
 
-    print(f"📂 正在加载 {len(excel_files)} 个 Excel 文件...")
+    print(f"Loading {len(excel_files)} Excel file(s)...")
 
     for file_path in excel_files:
         try:
-            print(f"  → 加载: {os.path.basename(file_path)}")
+            print(f"  Loading: {os.path.basename(file_path)}")
             df = pd.read_excel(file_path, sheet_name=0, engine="openpyxl")
             
             for _, row in df.iterrows():
@@ -207,9 +203,9 @@ def load_exam_database_from_folder(folder_path):
                 answer = str(row.get("答案", "")).strip()
 
                 if not exam_name or not question or not answer:
-                    continue  # 跳过空行
+                    continue  # Skip incomplete rows.
 
-                # 填充映射
+                # Populate the lookup maps.
                 if exam_name not in exam_question_map:
                     exam_question_map[exam_name] = []
                 exam_question_map[exam_name].append(question)
@@ -221,28 +217,28 @@ def load_exam_database_from_folder(folder_path):
                     continue
 
         except Exception as e:
-            print(f"  ❌ 跳过文件 {file_path}（错误：{e}）")
+            print(f"  Skipping {file_path} because it could not be loaded: {e}")
 
     return exam_question_map, question_answer_map, sorted(list(exam_keywords))
 
 exam_question_map, question_answer_map, exam_keywords = load_exam_database_from_folder(EXCEL_FOLDER)
 
-# ===================== 4. 模糊匹配函数 =====================
-def fuzzy_match(query, candidates, threshold=0.1): # 降低默认阈值
+# 4. Fuzzy matching
+def fuzzy_match(query, candidates, threshold=0.1):
     if not query: return ""
     query = query.strip()
     
-    # 1. 第一优先级：全匹配
+    # 1. Prefer an exact match.
     if query in candidates:
         return query
     
-    # 2. 第二优先级：互相包含判断 (针对长名字最有效)
+    # 2. Check bidirectional containment for long formal names.
     for candidate in candidates:
         candidate_clean = candidate.strip()
         if query in candidate_clean or candidate_clean in query:
             return candidate
     
-    # 3. 第三优先级：模糊相似度 (处理错别字)
+    # 3. Fall back to character-set similarity for minor typos.
     max_sim = 0
     best_candidate = ""
     for candidate in candidates:
@@ -256,7 +252,7 @@ def fuzzy_match(query, candidates, threshold=0.1): # 降低默认阈值
     
  
 
-#        ============考试归一化函数        ================
+# Canonical exam-name aliases
 EXAM_ALIAS = {
     "二级建造师考试": [
         "二级建造师",
@@ -274,15 +270,15 @@ EXAM_ALIAS = {
 
 
 
-# ===================== 全局变量：用于指代消解 =====================
-LAST_EXAM = None 
+# Conversation state used for omitted exam references.
+LAST_EXAM = None
 
-# ===================== 修改：归一化函数（增加长名称强制锁定） =====================
+# Normalize aliases and long-form exam names.
 def normalize_exam(exam_query):
     if not exam_query:
         return ""
     
-    # 强制补丁：针对长名称和常见简称的硬锁定
+    # Lock common abbreviations to their canonical long-form names.
     query_strip = exam_query.strip()
     if any(kw in query_strip for kw in ["软考", "软件"]):
         return "计算机技术与软件专业技术资格考试"
@@ -299,10 +295,10 @@ def normalize_exam(exam_query):
     return exam_query
 
 def extract_entities(user_input):
-    """封装原本散落在外的实体识别逻辑"""
+    """Extract and merge rule-based and BIO-model entities from a query."""
     entities = {"EXAM": "", "ACTION": "", "CONSTRAINT": "", "CITY": "", "TIME": ""}
     
-    # --- 1. 规则匹配城市 ---
+    # 1. Rule-based city matching
     known_cities = {"遂宁", "成都", "绵阳", "德阳", "泸州", "宜宾", "南充", "达州", "资阳", "自贡", "内江", "乐山", "眉山", "广安", "雅安", "广元", "巴中", "攀枝花"}
     rule_city = ""
     for city in known_cities:
@@ -310,14 +306,14 @@ def extract_entities(user_input):
             rule_city = city
             break
 
-    # --- 2. 规则匹配考试 ---
+    # 2. Rule-based exam matching
     rule_exam = ""
     for canonical, aliases in EXAM_ALIAS.items():
         if any(alias in user_input for alias in aliases):
             rule_exam = canonical
             break
 
-    # --- 3. BERT 模型预测 ---
+    # 3. BERT token classification
     text_chars = list(user_input)
     encoded = bio_tokenizer(text_chars, is_split_into_words=True, return_tensors='pt', padding='max_length', truncation=True, max_length=510).to(DEVICE)
     with torch.no_grad():
@@ -325,7 +321,7 @@ def extract_entities(user_input):
         pred_ids = torch.argmax(outputs.logits, dim=-1).squeeze().cpu().tolist()
         bio_labels = [bio_id_to_label[id] for id in pred_ids][1:len(text_chars)+1]
     
-    # --- 4. 解析 BIO 标签 ---
+    # 4. Decode BIO tags
     current_type, current_val = None, ""
     model_entities = {}
     for char, label in zip(text_chars, bio_labels):
@@ -338,7 +334,7 @@ def extract_entities(user_input):
             if current_type: model_entities[current_type] = current_val
             current_type, current_val = None, ""
 
-    # --- 5. 逻辑融合 ---
+    # 5. Merge rule-based and model entities
     entities["EXAM"] = rule_exam if rule_exam else model_entities.get("EXAM", "")
     entities["CITY"] = rule_city if rule_city else model_entities.get("CITY", "")
     entities["ACTION"] = model_entities.get("ACTION", "")
@@ -350,22 +346,20 @@ def extract_entities(user_input):
 
 
 
-#======================= 5.2.4 新增：报名类信息查找函数 =====================
+# 5.1. Registration-information lookup
 def search_registration_info(matched_exam, question_answer_map):
-    """
-    在数据库中查找某考试的报名 / 地址 / 官网相关问题
-    """
+    """Find registration, address, or official-site information for an exam."""
     for q, a in question_answer_map.items():
         place_keywords = ["在哪", "哪里", "地址", "官网", "入口"]
         if any(kw in q for kw in place_keywords) and ("报名" in q):
-        # 再粗略判断是否属于该考试（避免跨考试匹配）
+        # Prevent a registration answer from leaking across exam scopes.
             if any(alias in q for alias in ["二建", "建造师", "二级建造", matched_exam]):
                 return q, a
     return None, None
 
 
 
-# ======================== 5.3 新增：从答案中提取URL函数 =====================
+# 5.2. URL extraction
 def extract_urls_from_exam(matched_exam, question_answer_map):
     urls = set()
     for q, a in question_answer_map.items():
@@ -374,17 +368,17 @@ def extract_urls_from_exam(matched_exam, question_answer_map):
             urls.update(found)
     return list(urls)
 
-# ======================== 5.4 新增：字符串相似度函数 =====================
+# 5.3. Character-overlap similarity
 def similarity(s1, s2):
     set1, set2 = set(s1), set(s2)
     return len(set1 & set2) / max(len(set1 | set2), 1)
 
 
-# ===================== 6. 核心：实体匹配Excel，返回答案 =====================
+# 6. Core retrieval and response pipeline
 def get_answer_from_exam_db(user_input):
-    global LAST_EXAM  # 声明引用全局变量
-    
-    # 1. 系统级拦截（密码/登录问题）
+    global LAST_EXAM
+
+    # 1. Handle account and login issues before exam routing.
     system_keywords = ["忘记", "密码", "登录", "登陆", "账号", "无法登录"]
     if any(k in user_input for k in system_keywords):
         for q, a in question_answer_map.items():
@@ -392,56 +386,56 @@ def get_answer_from_exam_db(user_input):
                 return f"【系统问题】\n问题：{q}\n答案：{a}"
         return qwen_chat(f"用户遇到登录问题：{user_input}\n请给出通用找回建议，不超过30字。")
 
-    # 2. 实体与意图解析
+    # 2. Parse entities and intent.
     entities = extract_entities(user_input)
     intent = predict_intent(user_input)
     
-    # 获取本次提取到的考试
+    # Read the exam extracted from the current query.
     current_exam = entities.get("EXAM", "")
     
-    # --- 指代消解逻辑 (逻辑优化：仅在当前没提考试时才继承) ---
+    # Inherit the prior exam only when the current query omits one.
     exam = current_exam
     if not exam and LAST_EXAM:
         common_queries = ["在哪", "怎么", "条件", "时间", "入口", "满足", "免试"]
         if any(kw in user_input for kw in common_queries):
             exam = LAST_EXAM
-            print(f"【DEBUG】指代消解：继承上下文考试: {exam}")
+            print(f"[DEBUG] Inherited exam from conversation context: {exam}")
 
-    # 3. 规范化与库匹配
+    # 3. Normalize the exam name and match it to a knowledge-base scope.
     norm_exam = normalize_exam(exam)
-    # 强制用Excel实际加载的考试名列表做匹配
+    # Prefer the exact canonical names loaded from Excel.
     if norm_exam not in list(exam_question_map.keys()):
-        # 额外加一次模糊匹配，防止名称细微差异
+        # Fall back to fuzzy matching for small naming differences.
         norm_exam = fuzzy_match(norm_exam, list(exam_question_map.keys()))
 
-    #===== 强制锁定长名称 =====
+    # Lock the final value to an exam name available in the knowledge base.
     if norm_exam in exam_keywords:
         matched_exam = norm_exam
     else:
         matched_exam = fuzzy_match(norm_exam, exam_keywords, threshold=0.1)
 
- # --- 情况 A: 彻底没这个考试 (例如用户提了“教资”，但库里没匹配到) ---
+    # Case A: the knowledge base has no matching exam.
     if not matched_exam:
-        # 提取并清洗要展示的考试名，空值/无效值置空
+        # Clean the extracted name before displaying it.
         display_name = str(exam).strip() if exam else ""
-        # 过滤无效值（避免显示nan/None等异常字符）
+        # Do not surface invalid placeholder values.
         display_name = "" if display_name.lower() in ["", "nan", "none"] else display_name
         
         if display_name:
-            # 有明确考试名（如教资/教师资格考试）→ 直接提示未收录
+            # The user named an exam that is not covered.
             return f"抱歉，本系统目前暂未收录【{display_name}】的相关信息，建议您关注官方公告或咨询对应主管部门。"
         else:
-            # 无明确考试名 → 简洁提示并引导，不重复冗余
+            # Ask for an exam name when none was identified.
             return "您好！本系统主营政务及专业技术资格考试咨询，请告知您想咨询的具体考试名称~"
 
-    # --- 情况 B: 匹配成功，更新记忆并进入知识库检索 ---
+    # Case B: remember the matched exam and search its FAQ scope.
     LAST_EXAM = matched_exam
-    print(f"【DEBUG】最终锁定题库: {matched_exam}")
+    print(f"[DEBUG] Selected FAQ scope: {matched_exam}")
 
-    # 4. 知识库匹配得分逻辑
+    # 4. Score FAQ candidates within the selected exam scope.
     candidate_questions = exam_question_map.get(matched_exam, [])
     action = entities.get("ACTION", "")
-    # 结合意图识别结果调整 action
+    # Refine the extracted action with the intent classifier.
     if intent == "报名意图": 
         action = "报名"
     elif intent == "报名时间": 
@@ -453,33 +447,33 @@ def get_answer_from_exam_db(user_input):
         score = 0
         q_l, u_l = q.lower(), user_input.lower()
         
-        # 1. 考试名称匹配（基础分，防止跨考试）
+        # 1. Reward exam-name agreement to prevent cross-exam matches.
         if matched_exam.lower() in q_l: 
             score += 5 
         
-        # 🌟 优先级1：条件类提问（35分，覆盖“我想/我适合”）
+        # Priority 1: eligibility and requirements.
         condition_keywords = ["我想", "我适合", "我可以", "能不能", "符合吗", "条件", "要求", "资格"]
         if any(kw in u_l for kw in condition_keywords):
             if any(target in q_l for target in ["报考条件", "报名条件", "报名要求", "报考资格"]):
                 score += 35
                 return score
         
-        # 🌟 优先级2：地址/入口类提问（30分，明确关键词，排除“属地/材料”）
-        # 核心：只匹配“在哪报名/入口/官网/网站”，不包含“属地/证明/材料”
+        # Priority 2: registration location and entry point.
+        # Exclude residence-policy and document questions from this route.
         address_keywords = ["在哪报名", "哪里报", "报名入口", "官网", "网站", "报名地址"]
         if any(kw in u_l for kw in address_keywords) or (any(k in u_l for k in ["在哪", "哪里"]) and "报名" in u_l):
-            # 只匹配含“入口/官网/地址/网站”的问题，排除“属地/证明/材料”
+            # Require explicit site or address terms in the FAQ candidate.
             if any(target in q_l for target in ["报名入口", "官网", "报名地址", "报名网站"]) and not any(exclude in q_l for exclude in ["属地", "证明", "材料"]):
                 score += 30
                 return score
         
-        # 🌟 优先级3：材料/证明类提问（25分，单独分类，不干扰地址）
+        # Priority 3: required documents and supporting evidence.
         elif any(k in u_l for k in ["材料", "证明", "上传什么"]):
             if any(target in q_l for target in ["材料", "证明", "上传"]):
                 score += 25
                 return score
         
-        # 🌟 优先级4：时间类提问（20分，区分报名/考试时间）
+        # Priority 4: distinguish registration dates from exam dates.
         elif any(k in u_l for k in ["时间", "几号", "日期", "什么时候"]):
             if "报名时间" in q_l:
                 score += 20
@@ -487,12 +481,12 @@ def get_answer_from_exam_db(user_input):
                 score += 18
             return score
         
-        # 其他类型（免试等，20分）
+        # Other supported categories, such as exemptions.
         elif any(k in u_l for k in ["免试", "减免"]):
             if "免试" in q_l: 
                 score += 20
         
-        # 字符重叠度（补充分）
+        # Add a small character-overlap score.
         overlap = len(set(user_input) & set(q_l)) / max(len(set(user_input)), 1)
         score += overlap * 5
         
@@ -501,33 +495,32 @@ def get_answer_from_exam_db(user_input):
 
         
     best_q, best_score = "", 0
-    used_questions = set() # 新增：记录已返回的问题
+    used_questions = set()
     for q in candidate_questions:
         if q in used_questions:
             continue
         s = score_question(q)
         if s > best_score:
             best_q, best_score = q, s
-    used_questions.add(best_q) # 新增：标记已使用
+    used_questions.add(best_q)
 
-    # 5. 结果处理
+    # 5. Return the best curated answer above the threshold.
     if best_score >= 3:
         ans = question_answer_map[best_q].strip()
-        # 🌟 核心优化：所有条件类回答强制加统一提示
-        # 只要问题含“条件/资格”，无论用户提问是否带“适合”，都加提示
+        # Append a consistent verification notice to eligibility answers.
         if any(kw in best_q.lower() for kw in ["报考条件", "报名条件", "报考资格"]):
             return f"【{matched_exam}】\n问题：{best_q}\n答案：{ans}\n\n💡 助手提示：请您对照上述要求自行核实学历、年限及属地等条件。若不确定，请以官方审核结果为准。"
         
-        # 其他类型回答保持原有逻辑
+        # Preserve the standard response format for other answer types.
         elif any(kw in user_input for kw in ["推荐", "适合问"]):
             return f"根据您的需求，为您找到【{matched_exam}】的相关信息：\n{ans}"
         
         else:
             return f"【{matched_exam}】\n问题：{best_q}\n答案：{ans}"
 
-    # 最终兜底：交给 Qwen，但带上约束信息
+    # Final fallback: pass bounded context to Qwen.
     urls = extract_urls_from_exam(matched_exam, question_answer_map)
-    city = entities.get("CITY", "全国") # 修正变量名
+    city = entities.get("CITY", "全国")
     prompt = f"""
 你现在是【政务咨询机器人】。
 只能基于【已知信息】回答。如果信息不足，请引导用户查看官网。
@@ -574,7 +567,7 @@ def get_answer_from_exam_db(user_input):
     return qwen_chat(prompt)
 
 
-# ===================== 7. 测试对话 =====================
+# 7. Interactive command-line demo
 if __name__ == "__main__":
     print("=== 考试问答系统 ===")
     while True:

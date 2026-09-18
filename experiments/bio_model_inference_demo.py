@@ -3,7 +3,7 @@ import torch
 import os
 from pathlib import Path
 
-# ====================== 1. 配置参数（和训练时一致） ======================
+# 1. Configuration shared with training
 labels = [
     'O',
     'B-EXAM', 'I-EXAM',
@@ -17,18 +17,18 @@ id_to_label = {i: label for i, label in enumerate(labels)}
 max_length = 510   
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# ====================== 2. 加载训练好的模型和分词器 ======================
+# 2. Load the trained model and tokenizer
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 model_path = os.getenv(
     "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
-)  # 训练好的模型路径
+)  # Trained BIO model directory
 tokenizer = BertTokenizer.from_pretrained(model_path)
 model = BertForTokenClassification.from_pretrained(model_path)
 model = model.to(device)
-model.eval()  # 预测模式
-print(f"✅ 模型加载完成，使用设备：{device}")
+model.eval()  # Inference mode
+print(f"Model loaded on: {device}")
 
-# ====================== 3. 复用长文本处理和预测函数 ======================
+# 3. Long-text preprocessing and inference
 def process_long_text(long_text, long_labels=None, max_length=128):
     text_chars = list(long_text)
     total_chars = len(text_chars)
@@ -59,28 +59,28 @@ def predict_long_text(long_text, max_length=128):
     encoded_chunks, _, text_chunks = process_long_text(long_text, None, max_length=max_length)
     all_pred_labels = []
 
-    with torch.no_grad():  # 关闭梯度，节省资源
+    with torch.no_grad():  # Disable gradients during inference.
         for encoded in encoded_chunks:
             outputs = model(
                 input_ids=encoded["input_ids"].unsqueeze(0).to(device),
                 attention_mask=encoded["attention_mask"].unsqueeze(0).to(device)
             )
             pred_ids = torch.argmax(outputs.logits, dim=-1).squeeze().cpu().tolist()
-            pred_labels = [id_to_label[id] for id in pred_ids][1:-1]  # 去掉CLS/SEP，已修复.item()问题
+            pred_labels = [id_to_label[id] for id in pred_ids][1:-1]  # Remove CLS and SEP labels.
             all_pred_labels.extend(pred_labels)
 
     all_pred_labels = all_pred_labels[:len(list(long_text))]
     return list(long_text), all_pred_labels
 
-# ====================== 4. 测试预测（直接运行） ======================
+# 4. Standalone inference example
 if __name__ == "__main__":
-    # 你想测试的句子
+    # Replace this query with another Chinese exam question as needed.
     test_sentence = "今年英语四级报名截止时间是什么"
-    # 也可以换其他句子测试
+    # Alternative example:
     # test_sentence = "明年教师资格证考试缴费流程是什么"
     
     chars, pred_labels = predict_long_text(test_sentence)
-    print(f"\n测试句子：{test_sentence}")
-    print("BIO标注结果：")
+    print(f"\nTest sentence: {test_sentence}")
+    print("BIO labels:")
     for char, label in zip(chars, pred_labels):
         print(f"{char}\t{label}")
