@@ -128,11 +128,10 @@ def qwen_chat(prompt, max_new_tokens=200):
             temperature=0.2,  # Keep generation conservative.
             top_p=0.85,
             eos_token_id=qwen_tokenizer.eos_token_id,
-            pad_token_id=qwen_tokenizer.pad_token_id, 
-            num_return_sequences=1, 
+            pad_token_id=qwen_tokenizer.pad_token_id,
+            num_return_sequences=1,
             repetition_penalty=1.2,
-            early_stopping=True,  # Stop when the EOS token is generated.
-            stopping_criteria=[torch.nn.CrossEntropyLoss()]
+            # Generation stops when the model emits its configured EOS token.
         )
     
     generated_ids = [
