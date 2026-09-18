@@ -5,15 +5,13 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
-# Keep path diagnostics visible during local startup.
-print(f"Added project root to the Python path: {BASE_DIR}")
-print(f"Current Python search path: {sys.path[:3]}")
 
 # 2. Import application dependencies after configuring the path.
 from flask import Flask, request, render_template_string
-from exam_chat_core import init_exam_chat, get_answer_from_exam_db
+from exam_chat_core import get_answer_from_exam_db, get_backend_mode, init_exam_chat
 
 app = Flask(__name__)
+BACKEND_MODE = get_backend_mode()
 
 # 3. Embedded HTML template for the prototype UI.
 
@@ -29,6 +27,7 @@ HTML_TPL = """
         body { background: #f0f2f5; padding: 20px; max-width: 800px; margin: 0 auto; }
         .box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
         h1 { color: #1f2937; font-size: 24px; text-align: center; margin-bottom: 30px; font-weight: 600; }
+        .mode-banner { margin: -12px 0 20px; padding: 10px 14px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 13px; line-height: 1.5; }
         /* Conversation history */
         .chat-history { height: 400px; overflow-y: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; background: #f9fafb; }
         .chat-history::-webkit-scrollbar { width: 6px; }
@@ -50,12 +49,15 @@ HTML_TPL = """
         .loading { color: #6b7280; text-align: center; padding: 10px; font-size: 14px; }
         .answer { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9fafb; border: 1px solid #e5e7eb; }
     </style>
-    <!-- jQuery keeps the prototype's AJAX code compact. -->
-    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 </head>
 <body>
     <div class="box">
         <h1>四川省人事考试智能客服</h1>
+        {% if demo_mode %}
+        <div class="mode-banner">
+            可复现演示模式：当前回答来自仓库内的合成 FAQ，仅用于验证路由和检索流程，不代表真实考试政策。
+        </div>
+        {% endif %}
         <!-- Conversation history -->
         <div class="chat-history" id="chatHistory">
             <!-- JavaScript appends new messages here. -->
@@ -71,99 +73,67 @@ HTML_TPL = """
     </div>
 
     <script>
-        $(function() {
-            // Submit when the button is clicked.
-            $("#submitBtn").click(submitQuestion);
-            // Enter submits; Shift+Enter inserts a newline.
-            $("#questionInput").keydown(function(e) {
-                if (e.keyCode === 13 && !e.shiftKey) {
-                    e.preventDefault();
+        document.addEventListener("DOMContentLoaded", function() {
+            const submitButton = document.getElementById("submitBtn");
+            const questionInput = document.getElementById("questionInput");
+            const chatHistory = document.getElementById("chatHistory");
+
+            submitButton.addEventListener("click", submitQuestion);
+            questionInput.addEventListener("keydown", function(event) {
+                if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
                     submitQuestion();
                 }
             });
 
-            // Submit the question asynchronously.
-            function submitQuestion() {
-                const question = $.trim($("#questionInput").val());
+            async function submitQuestion() {
+                const question = questionInput.value.trim();
                 if (!question) {
                     alert("请输入您要咨询的问题！");
                     return;
                 }
 
-                // 1. Append the user message and clear the input.
-                const userHtml = `
-                    <div class="user-message">
-                        <div class="content">${escapeHtml(question)}</div>
-                    </div>
-                `;
-                $("#chatHistory").append(userHtml);
-                $("#questionInput").val("");
-                // Keep the newest message visible.
+                appendMessage("user-message", question);
+                questionInput.value = "";
+                const loading = document.createElement("div");
+                loading.className = "loading";
+                loading.id = "loading";
+                loading.textContent = "正在为您查询，请稍候...";
+                chatHistory.appendChild(loading);
                 scrollToBottom();
+                submitButton.disabled = true;
 
-                // 2. Show the loading state.
-                const loadingHtml = '<div class="loading" id="loading">正在为您查询，请稍候...</div>';
-                $("#chatHistory").append(loadingHtml);
-                scrollToBottom();
-                $("#submitBtn").prop("disabled", true); // Prevent duplicate submissions.
-
-                // 3. Call the backend API.
-                $.ajax({
-                    url: "/api/chat", // AJAX endpoint
-                    type: "POST",
-                    contentType: "application/json; charset=utf-8",
-                    data: JSON.stringify({ question: question }), // User question payload
-                    success: function(res) {
-                        // 4. Replace the loading state with the response.
-                        $("#loading").remove();
-                        $("#submitBtn").prop("disabled", false);
-                        if (res.success) {
-                            const assistantHtml = `
-                                <div class="assistant-message">
-                                    <div class="content">${escapeHtml(res.answer).replace(/\\n/g, "<br>")}</div>
-                                </div>
-                            `;
-                            $("#chatHistory").append(assistantHtml);
-                        } else {
-                            const errorHtml = `
-                                <div class="assistant-message">
-                                    <div class="content">${escapeHtml(res.answer)}</div>
-                                </div>
-                            `;
-                            $("#chatHistory").append(errorHtml);
-                        }
-                        scrollToBottom();
-                    },
-                    error: function() {
-                        // 5. Show a user-facing network error.
-                        $("#loading").remove();
-                        $("#submitBtn").prop("disabled", false);
-                        const errorHtml = `
-                            <div class="assistant-message">
-                                <div class="content">网络异常，请求失败，请稍后再试！</div>
-                            </div>
-                        `;
-                        $("#chatHistory").append(errorHtml);
-                        scrollToBottom();
-                    }
-                });
+                try {
+                    const response = await fetch("/api/chat", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({question: question})
+                    });
+                    const payload = await response.json();
+                    document.getElementById("loading")?.remove();
+                    appendMessage("assistant-message", payload.answer || "请求未返回答案。");
+                } catch (error) {
+                    document.getElementById("loading")?.remove();
+                    appendMessage("assistant-message", "网络异常，请求失败，请稍后再试！");
+                } finally {
+                    submitButton.disabled = false;
+                }
             }
 
-            // Escape HTML to prevent XSS injection.
-            function escapeHtml(str) {
-                if (!str) return "";
-                return str
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;")
-                    .replace(/'/g, "&#039;");
+            function appendMessage(className, text) {
+                const wrapper = document.createElement("div");
+                wrapper.className = className;
+                const content = document.createElement("div");
+                content.className = "content";
+                content.textContent = text;
+                content.style.whiteSpace = "pre-wrap";
+                wrapper.appendChild(content);
+                chatHistory.appendChild(wrapper);
+                scrollToBottom();
             }
 
-            // Scroll to the bottom of the conversation.
             function scrollToBottom() {
-                const chatHistory = $("#chatHistory");
-                chatHistory.scrollTop(chatHistory[0].scrollHeight);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
             }
         });
     </script>
@@ -180,18 +150,19 @@ def index():
         user_q = request.form.get('q', '').strip()
         if user_q:
             ans = get_answer_from_exam_db(user_q)
-    return render_template_string(HTML_TPL, ans=ans)
+    return render_template_string(HTML_TPL, ans=ans, demo_mode=BACKEND_MODE == "demo")
 
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
     # Read the question submitted by the AJAX client.
-    user_q = request.json.get('question', '').strip()
+    payload = request.get_json(silent=True) or {}
+    user_q = str(payload.get('question', '')).strip()
     if not user_q:
-        return {"success": False, "answer": "请输入有效问题！"}
+        return {"success": False, "answer": "请输入有效问题！", "mode": BACKEND_MODE}
     # Delegate to the core QA pipeline.
     answer = get_answer_from_exam_db(user_q)
     # Return a JSON response for the client.
-    return {"success": True, "answer": answer}
+    return {"success": True, "answer": answer, "mode": BACKEND_MODE}
 
 # 5. Local application entry point.
 if __name__ == "__main__":
