@@ -19,7 +19,7 @@ BIO_MODEL_PATH = os.getenv(
 )
 EXCEL_FOLDER = os.getenv("FAQ_DATA_DIR", str(PROJECT_ROOT / "faq_data"))
 INTENT_MODEL_PATH = os.getenv(
-    "INTENT_MODEL_PATH", str(PROJECT_ROOT / "核心模型算法" / "intent_model.pkl")
+    "INTENT_MODEL_PATH", str(PROJECT_ROOT / "experiments" / "intent_model.pkl")
 )
 QWEN_MODEL_PATH = os.getenv("QWEN_MODEL_PATH", str(PROJECT_ROOT / "Qwen"))
 

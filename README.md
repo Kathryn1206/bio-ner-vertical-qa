@@ -51,14 +51,14 @@ bio-ner-vertical-qa/
 │   └── core_code.py                 # Integrated routing and QA pipeline
 ├── web/
 │   └── web_app.py                   # Flask chat interface
-├── 核心模型算法/
-│   ├── BIO分词器.py                   # BIO dataset generation and BERT training
-│   ├── 意图识别模型.py                # Intent-classifier training
-│   ├── 自动生成提问.py                # Synthetic intent-data generation
-│   ├── 模型测试.py                    # BIO model inference test
-│   ├── Qwen接入.py                    # Local Qwen inference experiment
-│   ├── 简单意图捕捉.py                # Zero-shot intent baseline
-│   └── 接入Qwen及BIO后实际测试.py       # Earlier integrated prototype
+├── experiments/
+│   ├── train_bio_ner.py                  # BIO dataset generation and BERT training
+│   ├── train_intent_classifier.py        # Intent-classifier training
+│   ├── generate_intent_data.py           # Synthetic intent-data generation
+│   ├── bio_model_inference_demo.py       # BIO model inference demo
+│   ├── qwen_inference_demo.py            # Local Qwen inference experiment
+│   ├── zero_shot_intent_baseline.py      # Zero-shot intent baseline
+│   └── integrated_pipeline_prototype.py  # Earlier integrated prototype
 ├── requirements.txt
 └── .gitignore
 ```
@@ -82,7 +82,7 @@ bio-ner-vertical-qa/
 ├── exam_bio_final_model/            # Fine-tuned BERT model and tokenizer
 ├── faq_data/                         # Local .xlsx knowledge-base files
 ├── Qwen/                             # Local Qwen-1.8B model files
-└── 核心模型算法/
+└── experiments/
     └── intent_model.pkl              # Trained intent classifier
 ```
 
@@ -115,14 +115,14 @@ Run commands from the repository root.
 Generate synthetic intent examples and train the intent classifier:
 
 ```bash
-python "核心模型算法/自动生成提问.py"
-python "核心模型算法/意图识别模型.py"
+python experiments/generate_intent_data.py
+python experiments/train_intent_classifier.py
 ```
 
 Train the BIO token classifier:
 
 ```bash
-python "核心模型算法/BIO分词器.py"
+python experiments/train_bio_ner.py
 ```
 
 The included generators use template-based synthetic examples. For research-grade evaluation, replace or supplement them with independently annotated data and report entity-level precision, recall, and F1 on a held-out test set.
