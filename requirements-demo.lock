@@ -1,0 +1,10 @@
+# Exact versions used by the public Flask demo CI on Python 3.10 and 3.12.
+# The CLI demo itself uses only the Python standard library.
+blinker==1.9.0
+click==8.2.1
+colorama==0.4.6; platform_system == "Windows"
+Flask==3.1.2
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+Werkzeug==3.1.3

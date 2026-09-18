@@ -1,6 +1,7 @@
 # Conservative compatibility ranges for the documented Python 3.10 setup.
 # This file is not a fully reproduced lockfile. The narrow Qwen-related ranges
 # follow the original Qwen-1.8B-Chat custom-code dependency guidance.
+# Use requirements-demo.lock for the exactly pinned public reproduction path.
 accelerate>=0.21,<1.0
 einops>=0.6,<1.0
 Flask>=2.3,<4.0
