@@ -63,6 +63,10 @@ bio-ner-vertical-qa/
 └── .gitignore
 ```
 
+## Language conventions
+
+Developer-facing documentation, comments, docstrings, diagnostics, and experiment logs are written in English. Chinese text is retained where it is part of the system's task definition: training utterances, exam aliases, intent labels, prompt templates, FAQ column names, example queries, and end-user interface copy. Translating those domain assets would change the behavior or evaluation target of this Chinese-language QA system.
+
 ## Data and model policy
 
 The repository intentionally excludes:
