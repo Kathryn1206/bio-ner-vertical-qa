@@ -1,9 +1,17 @@
-from transformers import BertTokenizer,Trainer, TrainingArguments, BertForTokenClassification
+from transformers import BertTokenizer, Trainer, TrainingArguments, BertForTokenClassification, set_seed
 import torch
 import numpy as np
-from transformers import BertForTokenClassification
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import os
+from pathlib import Path
+import random
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SEED = int(os.getenv("TRAINING_SEED", "42"))
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+set_seed(SEED)
 labels = [
     'O',
     'B-EXAM', 'I-EXAM',
@@ -48,7 +56,7 @@ CONSTRAINT = [
 
 label_to_id = {label: i for i, label in enumerate(labels)}
 id_to_label = {i: label for i, label in enumerate(labels)}  
-model_name = "bert-base-chinese"
+model_name = os.getenv("BERT_BASE_MODEL", "bert-base-chinese")
 tokenizer = BertTokenizer.from_pretrained(model_name)
 model = BertForTokenClassification.from_pretrained(model_name, num_labels=len(labels))
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -240,6 +248,7 @@ def train_model():
     # 1. Generate the synthetic BIO dataset.
     print("===== Generating the exam-question BIO dataset =====")
     raw_dataset = generate_dataset()
+    random.Random(SEED).shuffle(raw_dataset)
     print(f"Dataset size: {len(raw_dataset)}")
     print("Example:", raw_dataset[0])
 
@@ -254,24 +263,26 @@ def train_model():
     
     # 4. Configure training.
     training_args = TrainingArguments(
-        output_dir="./exam_bio_model",  # Intermediate checkpoints
+        output_dir=str(PROJECT_ROOT / "exam_bio_model"),  # Intermediate checkpoints
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         learning_rate=2e-5,
-        logging_dir="./exam_bio_logs",
+        logging_dir=str(PROJECT_ROOT / "exam_bio_logs"),
         logging_steps=50,
         evaluation_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="f1_macro",
-        fp16=True,
+        fp16=torch.cuda.is_available(),
         report_to="none",
         remove_unused_columns=False,
-        no_cuda=False,
+        no_cuda=not torch.cuda.is_available(),
         dataloader_pin_memory=False,
         dataloader_num_workers=0,
-        gradient_accumulation_steps=4
+        gradient_accumulation_steps=4,
+        seed=SEED,
+        data_seed=SEED,
 )
 
     # 5. Build the Trainer and start training.
@@ -288,8 +299,10 @@ def train_model():
     
     # 6. Save the final model.
     print("===== Training complete; saving the model =====")
-    model.save_pretrained("./exam_bio_final_model")
-    tokenizer.save_pretrained("./exam_bio_final_model")
+    final_model_dir = PROJECT_ROOT / "exam_bio_final_model"
+    model.save_pretrained(final_model_dir)
+    tokenizer.save_pretrained(final_model_dir)
+    print(f"Training seed: {SEED}")
     
     # 7. Run a quick inference check.
     test_sentence = "今年英语四级报名截止时间是什么"
