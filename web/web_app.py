@@ -1,22 +1,21 @@
-# web_app.py 完整代码（直接覆盖原文件）
 import sys
 import os
 
-# 1. 根据当前文件位置确定项目根目录
+# 1. Resolve the project root from this file's location.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
-# 路径验证（方便排查，保留）
-print(f"✅ 已添加主目录到Python路径：{BASE_DIR}")
-print(f"✅ Python当前搜索路径：{sys.path[:3]}")
+# Keep path diagnostics visible during local startup.
+print(f"Added project root to the Python path: {BASE_DIR}")
+print(f"Current Python search path: {sys.path[:3]}")
 
-# 2. 路径配置后，再导入所有依赖
+# 2. Import application dependencies after configuring the path.
 from flask import Flask, request, render_template_string
 from exam_chat_core import init_exam_chat, get_answer_from_exam_db
 
 app = Flask(__name__)
 
-# 3. 前端HTML模板（无修改，保留原有样式）
+# 3. Embedded HTML template for the prototype UI.
 
 HTML_TPL = """
 <!DOCTYPE html>
@@ -30,41 +29,41 @@ HTML_TPL = """
         body { background: #f0f2f5; padding: 20px; max-width: 800px; margin: 0 auto; }
         .box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
         h1 { color: #1f2937; font-size: 24px; text-align: center; margin-bottom: 30px; font-weight: 600; }
-        /* 对话历史容器 */
+        /* Conversation history */
         .chat-history { height: 400px; overflow-y: auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; background: #f9fafb; }
         .chat-history::-webkit-scrollbar { width: 6px; }
         .chat-history::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-        /* 用户消息样式 */
+        /* User messages */
         .user-message { display: flex; justify-content: flex-end; margin-bottom: 15px; }
         .user-message .content { background: #4f46e5; color: white; padding: 12px 16px; border-radius: 12px 12px 0 12px; max-width: 70%; }
-        /* 助手消息样式 */
+        /* Assistant messages */
         .assistant-message { display: flex; justify-content: flex-start; margin-bottom: 15px; }
         .assistant-message .content { background: #ffffff; color: #1f2937; padding: 12px 16px; border-radius: 12px 12px 12px 0; max-width: 70%; border: 1px solid #e5e7eb; }
-        /* 输入框+按钮容器 */
+        /* Input and submit controls */
         .input-group { display: flex; gap: 10px; align-items: flex-end; }
         textarea { width: 100%; height: 100px; padding: 12px 16px; border: 1px solid #e5e6eb; border-radius: 8px; font-size: 15px; outline: none; resize: none; }
         textarea:focus { border-color: #4f46e5; box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1); }
         button { padding: 12px 30px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
         button:hover { background: #4338ca; }
         button:disabled { background: #9ca3af; cursor: not-allowed; }
-        /* 加载状态提示 */
+        /* Loading indicator */
         .loading { color: #6b7280; text-align: center; padding: 10px; font-size: 14px; }
         .answer { margin-top: 20px; padding: 15px; border-radius: 8px; background: #f9fafb; border: 1px solid #e5e7eb; }
     </style>
-    <!-- 引入jQuery（简化AJAX请求，无需手动写原生JS） -->
+    <!-- jQuery keeps the prototype's AJAX code compact. -->
     <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 </head>
 <body>
     <div class="box">
         <h1>四川省人事考试智能客服</h1>
-        <!-- 对话历史展示区 -->
+        <!-- Conversation history -->
         <div class="chat-history" id="chatHistory">
-            <!-- 历史对话会通过JS动态追加到这里 -->
+            <!-- JavaScript appends new messages here. -->
             <div class="assistant-message">
                 <div class="content">您好！我是人事考试智能客服，请问您想咨询哪项考试的相关问题？</div>
             </div>
         </div> 
-        <!-- 输入框+提交按钮 -->
+        <!-- Question input and submit button -->
         <div class="input-group">
             <textarea id="questionInput" placeholder="请输入您的问题（如：我想报名二建需要什么条件？）" required></textarea>
             <button id="submitBtn">提交咨询</button>
@@ -73,9 +72,9 @@ HTML_TPL = """
 
     <script>
         $(function() {
-            // 绑定提交按钮点击事件
+            // Submit when the button is clicked.
             $("#submitBtn").click(submitQuestion);
-            // 绑定回车键提交（按Enter提交，按Shift+Enter换行）
+            // Enter submits; Shift+Enter inserts a newline.
             $("#questionInput").keydown(function(e) {
                 if (e.keyCode === 13 && !e.shiftKey) {
                     e.preventDefault();
@@ -83,7 +82,7 @@ HTML_TPL = """
                 }
             });
 
-            // 核心：提交问题+AJAX异步请求
+            // Submit the question asynchronously.
             function submitQuestion() {
                 const question = $.trim($("#questionInput").val());
                 if (!question) {
@@ -91,7 +90,7 @@ HTML_TPL = """
                     return;
                 }
 
-                // 1. 将用户问题追加到历史对话，清空输入框
+                // 1. Append the user message and clear the input.
                 const userHtml = `
                     <div class="user-message">
                         <div class="content">${escapeHtml(question)}</div>
@@ -99,23 +98,23 @@ HTML_TPL = """
                 `;
                 $("#chatHistory").append(userHtml);
                 $("#questionInput").val("");
-                // 滚动到对话底部，显示最新消息
+                // Keep the newest message visible.
                 scrollToBottom();
 
-                // 2. 显示加载状态
+                // 2. Show the loading state.
                 const loadingHtml = '<div class="loading" id="loading">正在为您查询，请稍候...</div>';
                 $("#chatHistory").append(loadingHtml);
                 scrollToBottom();
-                $("#submitBtn").prop("disabled", true); // 禁用按钮，防止重复提交
+                $("#submitBtn").prop("disabled", true); // Prevent duplicate submissions.
 
-                // 3. AJAX异步请求后端API
+                // 3. Call the backend API.
                 $.ajax({
-                    url: "/api/chat", // 后端新增的AJAX路由
+                    url: "/api/chat", // AJAX endpoint
                     type: "POST",
                     contentType: "application/json; charset=utf-8",
-                    data: JSON.stringify({ question: question }), // 传递用户问题
+                    data: JSON.stringify({ question: question }), // User question payload
                     success: function(res) {
-                        // 4. 请求成功：移除加载状态，追加助手回答
+                        // 4. Replace the loading state with the response.
                         $("#loading").remove();
                         $("#submitBtn").prop("disabled", false);
                         if (res.success) {
@@ -136,7 +135,7 @@ HTML_TPL = """
                         scrollToBottom();
                     },
                     error: function() {
-                        // 5. 请求失败：提示错误
+                        // 5. Show a user-facing network error.
                         $("#loading").remove();
                         $("#submitBtn").prop("disabled", false);
                         const errorHtml = `
@@ -150,7 +149,7 @@ HTML_TPL = """
                 });
             }
 
-            // 工具函数：HTML转义，防止XSS注入
+            // Escape HTML to prevent XSS injection.
             function escapeHtml(str) {
                 if (!str) return "";
                 return str
@@ -161,7 +160,7 @@ HTML_TPL = """
                     .replace(/'/g, "&#039;");
             }
 
-            // 工具函数：滚动到对话历史底部
+            // Scroll to the bottom of the conversation.
             function scrollToBottom() {
                 const chatHistory = $("#chatHistory");
                 chatHistory.scrollTop(chatHistory[0].scrollHeight);
@@ -173,7 +172,7 @@ HTML_TPL = """
 """
 
 
-# 4. Flask路由（无修改，保留原有逻辑）
+# 4. Flask routes.
 @app.route('/', methods=['GET', 'POST'])
 def index():
     ans = ""
@@ -185,35 +184,35 @@ def index():
 
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
-    # 获取前端AJAX提交的用户问题
+    # Read the question submitted by the AJAX client.
     user_q = request.json.get('question', '').strip()
     if not user_q:
         return {"success": False, "answer": "请输入有效问题！"}
-    # 调用原有核心问答逻辑，无任何修改
+    # Delegate to the core QA pipeline.
     answer = get_answer_from_exam_db(user_q)
-    # 返回JSON格式结果，供前端解析
+    # Return a JSON response for the client.
     return {"success": True, "answer": answer}
 
-# 5. 项目启动入口（强制关闭重载器，避免重复加载）
+# 5. Local application entry point.
 if __name__ == "__main__":
-    import webbrowser  # 新增：导入浏览器控制库
-    # 初始化核心问答系统
+    import webbrowser
+    # Initialize the QA resources once before serving requests.
     init_exam_chat()
     app_host = os.getenv("APP_HOST", "127.0.0.1")
     app_port = int(os.getenv("APP_PORT", "5000"))
     flask_debug = os.getenv("FLASK_DEBUG", "false").lower() in {"1", "true", "yes", "on"}
     auto_open_browser = os.getenv("AUTO_OPEN_BROWSER", "true").lower() in {"1", "true", "yes", "on"}
-    # 启动Flask服务前，自动打开浏览器网页（核心新增代码）
+    # Optionally open the local UI before starting Flask.
     browser_host = "127.0.0.1" if app_host == "0.0.0.0" else app_host
     web_url = f"http://{browser_host}:{app_port}"
-    print(f"🌐 服务启动：{web_url}")
+    print(f"Starting the service at {web_url}")
     if auto_open_browser:
-        print("正在自动打开浏览器...")
+        print("Opening the browser...")
         webbrowser.open(web_url)
-    # 启动Flask服务（原有代码不变，保留use_reloader=False）
+    # Disable the reloader so large models are not initialized twice.
     app.run(
         debug=flask_debug,
         host=app_host,
         port=app_port,
-        use_reloader=False # 强制关闭重载器，避免重复加载/重复打开网页
+        use_reloader=False
     )
