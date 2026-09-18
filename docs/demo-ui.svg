@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="780" viewBox="0 0 900 780">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset in="blur" dy="3" result="offsetBlur"/>
+      <feFlood flood-color="#111827" flood-opacity="0.10" result="shadowColor"/>
+      <feComposite in="shadowColor" in2="offsetBlur" operator="in" result="shadow"/>
+      <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="900" height="780" fill="#f0f2f5"/>
+  <rect x="40" y="35" width="820" height="710" rx="12" fill="#ffffff" filter="url(#shadow)"/>
+  <text x="450" y="91" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="26" font-weight="600" fill="#1f2937">四川省人事考试智能客服</text>
+
+  <rect x="70" y="125" width="760" height="420" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+  <rect x="90" y="150" width="585" height="68" rx="12" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="110" y="191" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="18" fill="#1f2937">您好！我是人事考试智能客服，请问您想咨询哪项考试的相关问题？</text>
+
+  <rect x="70" y="570" width="590" height="120" rx="8" fill="#ffffff" stroke="#4f46e5" stroke-width="1.5"/>
+  <rect x="66" y="566" width="598" height="128" rx="11" fill="none" stroke="#4f46e5" stroke-opacity="0.10" stroke-width="4"/>
+  <text x="90" y="611" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="18" fill="#1f2937">二建什么时候报名？</text>
+
+  <rect x="680" y="630" width="150" height="60" rx="8" fill="#4f46e5"/>
+  <text x="755" y="668" text-anchor="middle" font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif" font-size="19" fill="#ffffff">提交咨询</text>
+</svg>
