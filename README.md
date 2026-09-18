@@ -88,25 +88,175 @@ bio-ner-vertical-qa/
 
 The FAQ loader expects the first worksheet of each `.xlsx` file to include the columns `分类一`, `问题`, and `答案`.
 
-## Environment
+## Environment setup and local deployment
 
-The prototype was developed with Python 3.10 and an NVIDIA CUDA environment. CPU execution is possible for the smaller components, but local Qwen inference is substantially more practical on a CUDA-capable GPU.
+### 1. Prerequisites
+
+- Git;
+- Python 3.10 (the reference development version);
+- enough local storage for the separately supplied model artifacts;
+- an NVIDIA CUDA environment for faithful end-to-end Qwen inference.
+
+The intent classifier, data utilities, and smaller BERT components can run on CPU. On Apple Silicon, PyTorch and the smaller components can be used where their dependencies support macOS, but the checked-in Qwen loading path was developed for CUDA and has not been validated as a Metal or MLX deployment.
+
+### 2. Clone the repository
 
 ```bash
-python -m venv .venv
+git clone https://github.com/Kathryn1206/bio-ner-vertical-qa.git
+cd bio-ner-vertical-qa
+```
+
+### 3. Create an isolated Python environment
+
+macOS or Linux:
+
+```bash
+python3.10 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip setuptools wheel
+```
+
+Windows PowerShell:
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip setuptools wheel
+```
+
+If PowerShell blocks activation, allow it for the current process only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### 4. Install PyTorch and project dependencies
+
+For CPU or macOS development, install the dependency manifest directly:
+
+```bash
 pip install -r requirements.txt
 ```
 
-By default, the application looks for the local artifacts in the layout shown above. Custom paths can be supplied without editing the source:
+For an NVIDIA machine, first use the [official PyTorch installation selector](https://pytorch.org/get-started/locally/) to install the build matching the operating system and CUDA runtime, then install the remaining dependencies:
 
 ```bash
-export BIO_MODEL_PATH=/path/to/exam_bio_final_model
-export FAQ_DATA_DIR=/path/to/faq_data
-export INTENT_MODEL_PATH=/path/to/intent_model.pkl
-export QWEN_MODEL_PATH=/path/to/Qwen
+pip install -r requirements.txt
 ```
+
+The original internship environment was not preserved as a lockfile. `requirements.txt` records the required packages, while the bundled documentation of a locally supplied Qwen model should take priority if it requires a specific `transformers` version.
+
+### 5. Supply the excluded artifacts
+
+The default configuration expects this layout:
+
+```text
+bio-ner-vertical-qa/
+├── exam_bio_final_model/
+│   ├── config.json
+│   ├── tokenizer_config.json
+│   └── model weights
+├── faq_data/
+│   └── one_or_more_knowledge_bases.xlsx
+├── Qwen/
+│   └── local Qwen-1.8B model files
+└── experiments/
+    └── intent_model.pkl
+```
+
+Each FAQ workbook must contain the columns `分类一`, `问题`, and `答案` in its first worksheet. Private data, trained weights, and serialized models are not downloaded automatically.
+
+### 6. Configure custom artifact paths
+
+No configuration is needed when the default layout is used. Otherwise, set any of the following environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BIO_MODEL_PATH` | `./exam_bio_final_model` | Fine-tuned BIO-NER model and tokenizer |
+| `FAQ_DATA_DIR` | `./faq_data` | Directory containing FAQ `.xlsx` files |
+| `INTENT_MODEL_PATH` | `./experiments/intent_model.pkl` | Serialized intent classifier |
+| `QWEN_MODEL_PATH` | `./Qwen` | Local Qwen model directory |
+| `APP_HOST` | `127.0.0.1` | Flask development-server host |
+| `APP_PORT` | `5000` | Flask development-server port |
+| `FLASK_DEBUG` | `false` | Enables Flask debug mode only when set to `true` |
+| `AUTO_OPEN_BROWSER` | `true` | Opens the local chat page after startup |
+
+macOS or Linux example:
+
+```bash
+export BIO_MODEL_PATH=/absolute/path/to/exam_bio_final_model
+export FAQ_DATA_DIR=/absolute/path/to/faq_data
+export INTENT_MODEL_PATH=/absolute/path/to/intent_model.pkl
+export QWEN_MODEL_PATH=/absolute/path/to/Qwen
+```
+
+Windows PowerShell example:
+
+```powershell
+$env:BIO_MODEL_PATH = "D:\models\exam_bio_final_model"
+$env:FAQ_DATA_DIR = "D:\data\faq_data"
+$env:INTENT_MODEL_PATH = "D:\models\intent_model.pkl"
+$env:QWEN_MODEL_PATH = "D:\models\Qwen"
+```
+
+### 7. Validate the installation
+
+Check the main imports and Python syntax:
+
+```bash
+python -c "import flask, joblib, numpy, openpyxl, pandas, sklearn, torch, transformers; print('Dependencies OK')"
+python -m compileall -q exam_chat_core experiments web
+```
+
+Check the default artifact layout:
+
+```bash
+python -c "from pathlib import Path; required=['exam_bio_final_model','faq_data','Qwen','experiments/intent_model.pkl']; missing=[p for p in required if not Path(p).exists()]; assert not missing, f'Missing artifacts: {missing}'; print('Artifact layout OK')"
+```
+
+On an NVIDIA machine, verify that PyTorch can access CUDA:
+
+```bash
+python -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
+```
+
+### 8. Start the local application
+
+Run the command from the repository root:
+
+```bash
+python web/web_app.py
+```
+
+Model loading happens during startup and can take some time. Unless configured otherwise, the browser opens at <http://127.0.0.1:5000>.
+
+With the application running, a macOS or Linux API smoke test is:
+
+```bash
+curl -X POST http://127.0.0.1:5000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"二建什么时候报名"}'
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:5000/api/chat" `
+  -ContentType "application/json" `
+  -Body '{"question":"二建什么时候报名"}'
+```
+
+### 9. Common setup problems
+
+- **Model or tokenizer path not found:** confirm the artifact layout or print the four model/data environment variables.
+- **No FAQ files loaded:** confirm that `FAQ_DATA_DIR` contains `.xlsx` files with the required column names.
+- **`device_map` or Accelerate error:** reinstall the dependencies inside the active virtual environment and confirm that `accelerate` is importable.
+- **CUDA is unavailable:** install a PyTorch build compatible with the installed driver by using the official selector; a system CUDA installation alone does not guarantee that the active PyTorch build supports CUDA.
+- **Qwen custom-code incompatibility:** use the dependency versions documented with the supplied Qwen checkpoint.
+- **macOS Qwen failure:** the repository does not claim a native MLX/MPS Qwen deployment; use the CUDA reference environment or adapt the fallback model separately.
+
+The included Flask server is for local demonstration only. Do not expose its debugger or development server as a production service; Flask's [deployment documentation](https://flask.palletsprojects.com/en/stable/deploying/) recommends a dedicated WSGI server or hosting platform for production.
 
 ## Training workflow
 
@@ -126,16 +276,6 @@ python experiments/train_bio_ner.py
 ```
 
 The included generators use template-based synthetic examples. For research-grade evaluation, replace or supplement them with independently annotated data and report entity-level precision, recall, and F1 on a held-out test set.
-
-## Running the prototype
-
-After supplying the local artifacts:
-
-```bash
-python web/web_app.py
-```
-
-Then open <http://127.0.0.1:5000>.
 
 ## Current status
 

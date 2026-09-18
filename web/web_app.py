@@ -199,14 +199,21 @@ if __name__ == "__main__":
     import webbrowser  # 新增：导入浏览器控制库
     # 初始化核心问答系统
     init_exam_chat()
+    app_host = os.getenv("APP_HOST", "127.0.0.1")
+    app_port = int(os.getenv("APP_PORT", "5000"))
+    flask_debug = os.getenv("FLASK_DEBUG", "false").lower() in {"1", "true", "yes", "on"}
+    auto_open_browser = os.getenv("AUTO_OPEN_BROWSER", "true").lower() in {"1", "true", "yes", "on"}
     # 启动Flask服务前，自动打开浏览器网页（核心新增代码）
-    web_url = "http://127.0.0.1:5000"
-    print(f"🌐 服务启动：{web_url}，正在自动打开浏览器...")
-    webbrowser.open(web_url)  # 新增：自动打开指定网址
+    browser_host = "127.0.0.1" if app_host == "0.0.0.0" else app_host
+    web_url = f"http://{browser_host}:{app_port}"
+    print(f"🌐 服务启动：{web_url}")
+    if auto_open_browser:
+        print("正在自动打开浏览器...")
+        webbrowser.open(web_url)
     # 启动Flask服务（原有代码不变，保留use_reloader=False）
     app.run(
-        debug=True,        # 开发模式，报错显示详情
-        host='0.0.0.0',    # 局域网可访问
-        port=5000,         # 服务端口
+        debug=flask_debug,
+        host=app_host,
+        port=app_port,
         use_reloader=False # 强制关闭重载器，避免重复加载/重复打开网页
     )
