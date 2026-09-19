@@ -3,13 +3,14 @@
 **A retrieval-first Chinese exam-support assistant for fuzzy, context-dependent registration questions.** It combines BIO-NER, intent routing, conversational context, and exam-scoped FAQ retrieval, invoking a constrained local Qwen model only when curated knowledge cannot answer.
 
 [![Syntax check](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml)
-[![License: review only](https://img.shields.io/badge/license-review%20only-lightgrey.svg)](LICENSE)
+[![Reproducible demo](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/reproducible-demo.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/reproducible-demo.yml)
+[![License: research reproduction](https://img.shields.io/badge/license-research%20reproduction-blue.svg)](LICENSE)
 
 <p align="center">
   <img src="docs/demo-ui.svg" alt="Local Flask chat interface with a Chinese exam-registration query entered" width="820">
 </p>
 
-<p align="center"><em>Local Flask interface with an example query entered but not submitted. Answer generation requires the local FAQ and model artifacts excluded from this repository.</em></p>
+<p align="center"><em>Local Flask interface. A bundled synthetic-data mode now reproduces the routing and retrieval behavior without private FAQ files or model weights.</em></p>
 
 Developed during a one-month industry internship, this repository is a sanitized source release of the resulting Chinese exam-registration support prototype.
 
@@ -23,26 +24,61 @@ The main design goal is to reduce hallucination in a high-precision information 
 
 **Implemented scope.** This repository contains the end-to-end prototype: a domain BIO label scheme and training pipeline, a TF-IDF intent classifier, alias and priority rules, conversational entity carry-over, exam-scoped FAQ matching, a constrained Qwen fallback, and a Flask interface.
 
-**Evaluation status.** No benchmark metric is reported in this release. The original private data and trained artifacts are excluded, so accuracy, entity-level F1, and hallucination-reduction claims would not currently be reproducible. The planned validation work is listed in the roadmap below.
+**Evaluation status.** The public demo behavior is reproducible and tested on Python 3.10 and 3.12. No benchmark metric is reported: the original private data and trained artifacts remain excluded, so the internship model's accuracy, entity-level F1, and hallucination-reduction effect are not claimed as publicly reproducible.
 
 ### Code review map
 
 | Review target | Evidence |
 |---|---|
 | Integrated NLU and response routing | [`exam_chat_core/core_code.py`](exam_chat_core/core_code.py) |
+| Artifact-free behavioral reproduction | [`exam_chat_core/demo.py`](exam_chat_core/demo.py), [`data/sample_faq.json`](data/sample_faq.json) |
 | BIO-NER data construction and fine-tuning | [`experiments/train_bio_ner.py`](experiments/train_bio_ner.py) |
 | Intent data and classifier training | [`experiments/generate_intent_data.py`](experiments/generate_intent_data.py), [`experiments/train_intent_classifier.py`](experiments/train_intent_classifier.py) |
 | Baselines and model probes | [`experiments/zero_shot_intent_baseline.py`](experiments/zero_shot_intent_baseline.py), [`experiments/bio_model_inference_demo.py`](experiments/bio_model_inference_demo.py) |
 | Local demonstration interface | [`web/web_app.py`](web/web_app.py) |
+| Reproduction protocol and automated checks | [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md), [`tests/`](tests), [demo CI](.github/workflows/reproducible-demo.yml) |
 
 ## Roadmap
 
+- [x] Publish a synthetic FAQ fixture with no private business content.
+- [x] Provide a dependency-free deterministic CLI reproduction.
+- [x] Test the Flask UI and API with a fully pinned lightweight environment.
 - [ ] Build an independently annotated, de-identified held-out evaluation set.
 - [ ] Report entity-level precision, recall, and F1, together with intent macro-F1.
 - [ ] Measure retrieval accuracy, knowledge-base coverage, unsupported-answer rate, and end-to-end latency.
 - [ ] Compare the hybrid pipeline with retrieval-only and unconstrained-generation baselines.
 - [ ] Run ablations for alias rules, conversational context, exam scoping, and the Qwen fallback.
-- [ ] Rebuild the reference environment from a clean machine and publish a validated lockfile.
+- [ ] Rebuild and lock the separate GPU-based full-model environment on a clean machine.
+
+## Reproduce the public demo
+
+The fastest path uses only Python 3.10 or later—no installation, model download,
+GPU, or private data is required:
+
+```bash
+git clone https://github.com/Kathryn1206/bio-ner-vertical-qa.git
+cd bio-ner-vertical-qa
+python -m exam_chat_core.demo --self-test
+python -m exam_chat_core.demo --query "二建什么时候报名？" --json
+```
+
+The first command verifies direct routing, conversational context carry-over,
+and the safe unsupported-query fallback. The second prints a structured trace
+containing the normalized exam, predicted intent, matched synthetic FAQ, and
+answer. All demo answers are marked `【演示数据】` and contain no current dates or
+URLs.
+
+To reproduce the browser interface and API:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate             # Windows: .\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-demo.lock
+EXAM_CHAT_MODE=demo python web/web_app.py
+```
+
+See [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md) for Windows commands, expected
+outputs, API verification, scope boundaries, and the full-pipeline path.
 
 ## System architecture
 
@@ -68,7 +104,7 @@ flowchart TD
 | Context handling | Previous-exam state | Resolves follow-up questions that omit the exam name |
 | Retrieval | Exam-scoped FAQ filtering and question matching | Returns curated answers before invoking a generative model |
 | Generative fallback | Local Qwen-1.8B model with constrained prompts | Produces a bounded response when the knowledge base has no direct match |
-| Interface | Flask + AJAX chat page | Provides a lightweight browser-based prototype |
+| Interface | Flask + browser-native JavaScript | Provides a lightweight browser prototype without a runtime CDN dependency |
 
 ## Hallucination-control strategy
 
@@ -87,14 +123,19 @@ This is a prototype rather than a production guarantee. A generative fallback ca
 ```text
 bio-ner-vertical-qa/
 ├── .github/workflows/
-│   └── syntax-check.yml             # Dependency-free Python syntax CI
+│   ├── syntax-check.yml             # Dependency-free Python syntax CI
+│   └── reproducible-demo.yml        # CLI, UI, and API tests on Python 3.10/3.12
+├── data/
+│   └── sample_faq.json              # Clearly labelled synthetic demo fixture
 ├── docs/
 │   └── demo-ui.svg                   # Portfolio-facing interface preview
 ├── exam_chat_core/
-│   ├── __init__.py
+│   ├── __init__.py                  # Lazy demo/full backend selection
+│   ├── demo.py                      # Artifact-free deterministic reproduction
 │   └── core_code.py                 # Integrated routing and QA pipeline
 ├── web/
 │   └── web_app.py                   # Flask chat interface
+├── tests/                            # Deterministic pipeline, UI, and API tests
 ├── experiments/
 │   ├── train_bio_ner.py                  # BIO dataset generation and BERT training
 │   ├── train_intent_classifier.py        # Intent-classifier training
@@ -104,8 +145,10 @@ bio-ner-vertical-qa/
 │   ├── zero_shot_intent_baseline.py      # Zero-shot intent baseline
 │   └── integrated_pipeline_prototype.py  # Earlier integrated prototype
 ├── .env.example                     # Safe local configuration template
-├── LICENSE                           # Portfolio-review notice; no reuse license
-├── requirements.txt
+├── REPRODUCIBILITY.md               # Exact public reproduction protocol
+├── LICENSE                           # Limited non-commercial reproduction rights
+├── requirements-demo.lock           # Exact lightweight web-demo environment
+├── requirements.txt                 # Full-pipeline compatibility ranges
 └── .gitignore
 ```
 
@@ -123,7 +166,7 @@ The repository intentionally excludes:
 - Qwen model weights;
 - virtual environments and local caches.
 
-These artifacts are excluded to keep the release small and to avoid redistributing internal or third-party data. The checked-in code therefore documents the architecture and training workflow, but end-to-end execution requires locally supplied artifacts.
+These artifacts are excluded to avoid redistributing internal or third-party data. In their place, the repository includes an explicitly synthetic FAQ fixture and a deterministic backend that reproduces alias normalization, intent routing, context carry-over, scoped retrieval, and safe fallback behavior. Running the original model-backed backend still requires locally supplied artifacts.
 
 Expected local layout:
 
@@ -138,7 +181,7 @@ bio-ner-vertical-qa/
 
 The FAQ loader expects the first worksheet of each `.xlsx` file to include the columns `分类一`, `问题`, and `答案`.
 
-## Environment setup and local deployment
+## Full-pipeline environment setup and local deployment
 
 ### 1. Prerequisites
 
@@ -222,6 +265,8 @@ No configuration is needed when the default layout is used. Otherwise, set any o
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `EXAM_CHAT_MODE` | `demo` | Uses `demo` for bundled synthetic reproduction or `full` for the model-backed pipeline |
+| `DEMO_FAQ_PATH` | `./data/sample_faq.json` | Optional replacement synthetic-demo fixture |
 | `BIO_MODEL_PATH` | `./exam_bio_final_model` | Fine-tuned BIO-NER model and tokenizer |
 | `FAQ_DATA_DIR` | `./faq_data` | Directory containing FAQ `.xlsx` files |
 | `INTENT_MODEL_PATH` | `./experiments/intent_model.pkl` | Serialized intent classifier |
@@ -277,7 +322,7 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available()); pr
 Run the command from the repository root:
 
 ```bash
-python web/web_app.py
+EXAM_CHAT_MODE=full python web/web_app.py
 ```
 
 Model loading happens during startup and can take some time. Unless configured otherwise, the browser opens at <http://127.0.0.1:5000>.
@@ -331,8 +376,8 @@ The included generators use template-based synthetic examples. For research-grad
 
 ## Current status
 
-This repository preserves an internship MVP and its experimental scripts. It is intended as a transparent portfolio and research artifact, not as a deployed public-information service. The private data and trained artifacts used during development are not part of this release, and no benchmark result is claimed without a reproducible evaluation set.
+This repository preserves an internship MVP and its experimental scripts. It now includes a tested public behavioral reproduction, but it remains a portfolio and research artifact rather than a deployed public-information service. The private data and trained artifacts used during development are not part of this release, and no benchmark result is claimed without a reproducible evaluation set.
 
 ## Use and licensing
 
-This repository is source-available for portfolio review and research discussion only; it is not open-source software. You may inspect the code to evaluate the work, but no permission is granted to use, copy, modify, distribute, deploy, sublicense, or create derivative works. Public visibility does not grant rights to the code, private data, trained artifacts, or third-party components. See [`LICENSE`](LICENSE) for the full notice.
+This repository is source-available under a limited research-reproduction license; it is not open-source software. The license permits local copying, execution, and private modification for non-commercial research, education, portfolio assessment, and reproduction. Redistribution, commercial use, public derivative works, and production deployment remain prohibited. See [`LICENSE`](LICENSE) for the complete terms.

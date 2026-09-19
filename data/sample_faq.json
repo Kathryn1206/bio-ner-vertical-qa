@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "data_type": "synthetic_demo_fixture",
+  "notice": "All answers are synthetic safety-oriented examples, not current exam policy.",
+  "system_faq": {
+    "login_problem": {
+      "question": "忘记账号或密码怎么办？",
+      "answer": "【演示数据】请从考试机构的官方登录页使用找回功能；若仍无法登录，请联系官方技术支持。样例不提供真实账号处理或网址。"
+    }
+  },
+  "exams": [
+    {
+      "name": "二级建造师考试",
+      "aliases": ["二建", "二级建造师", "建造师"],
+      "faqs": [
+        {
+          "intent": "registration_time",
+          "question": "二级建造师考试什么时候报名？",
+          "answer": "【演示数据】报名时间按年度和地区发布。本样例不提供真实日期，请以所在地人事考试机构的当年公告为准。"
+        },
+        {
+          "intent": "registration_entry",
+          "question": "二级建造师考试在哪里报名？",
+          "answer": "【演示数据】请通过所在地人事考试机构公布的官方入口办理。本样例不嵌入真实网址。"
+        },
+        {
+          "intent": "eligibility",
+          "question": "二级建造师考试需要什么报考条件？",
+          "answer": "【演示数据】学历、专业、工作年限和属地要求应按当年度当地公告逐项核验，本样例不作资格判断。"
+        },
+        {
+          "intent": "materials",
+          "question": "二级建造师考试报名需要哪些材料？",
+          "answer": "【演示数据】材料清单由当地年度公告确定；请准备公告要求的身份、学历及工作经历证明，并以审核页面为准。"
+        },
+        {
+          "intent": "registration_process",
+          "question": "二级建造师考试如何报名？",
+          "answer": "【演示数据】示例流程为阅读公告、注册、填写信息、资格核验和缴费；实际步骤以当地官方系统为准。"
+        },
+        {
+          "intent": "exam_time",
+          "question": "二级建造师考试什么时候考试？",
+          "answer": "【演示数据】考试日期由当年度官方通知确定，本样例刻意不生成具体日期。"
+        },
+        {
+          "intent": "certificate",
+          "question": "二级建造师考试证书怎么领取？",
+          "answer": "【演示数据】证书发放方式以当地主管部门通知为准，可能包含现场领取或邮寄等方式。"
+        }
+      ]
+    },
+    {
+      "name": "计算机技术与软件专业技术资格考试",
+      "aliases": ["软考", "软件考试", "计算机软考", "软件资格考试"],
+      "faqs": [
+        {
+          "intent": "registration_time",
+          "question": "计算机技术与软件专业技术资格考试什么时候报名？",
+          "answer": "【演示数据】报名安排可能因地区和批次不同。本样例不提供日期，请核对当地考试机构发布的当期公告。"
+        },
+        {
+          "intent": "registration_entry",
+          "question": "计算机技术与软件专业技术资格考试在哪里报名？",
+          "answer": "【演示数据】请从考试主管机构公开的官方页面进入报名系统；本样例不生成网址。"
+        },
+        {
+          "intent": "eligibility",
+          "question": "计算机技术与软件专业技术资格考试需要什么报考条件？",
+          "answer": "【演示数据】请以当期官方报名规则为准；本样例仅复现路由行为，不判断个人报考资格。"
+        },
+        {
+          "intent": "registration_process",
+          "question": "计算机技术与软件专业技术资格考试如何报名？",
+          "answer": "【演示数据】示例流程为查看公告、选择级别与资格、填写信息、核验并缴费，具体步骤以官方系统为准。"
+        },
+        {
+          "intent": "exam_time",
+          "question": "计算机技术与软件专业技术资格考试什么时候考试？",
+          "answer": "【演示数据】考试批次和日期应查询当期官方通知，本样例不输出可能过期的时间。"
+        }
+      ]
+    },
+    {
+      "name": "咨询工程师考试",
+      "aliases": ["咨询工程师", "咨询工程师考试"],
+      "faqs": [
+        {
+          "intent": "registration_time",
+          "question": "咨询工程师考试什么时候报名？",
+          "answer": "【演示数据】请查询当年度考试公告确认报名窗口，本样例不包含真实日期。"
+        },
+        {
+          "intent": "registration_entry",
+          "question": "咨询工程师考试在哪里报名？",
+          "answer": "【演示数据】请使用主管机构公告指定的官方报名入口，本样例不嵌入网址。"
+        },
+        {
+          "intent": "eligibility",
+          "question": "咨询工程师考试需要什么报考条件？",
+          "answer": "【演示数据】专业、学历和工作年限要求须按当年度官方文件核验，本样例不提供资格结论。"
+        },
+        {
+          "intent": "exam_time",
+          "question": "咨询工程师考试什么时候考试？",
+          "answer": "【演示数据】请以当年度官方考试计划为准；为防止过期信息，本样例不生成日期。"
+        }
+      ]
+    }
+  ]
+}

@@ -1,40 +1,57 @@
-from .core_code import (
-    # Core question-answering interface
-    get_answer_from_exam_db,
-    # Resource loaders
-    load_bio_model,
-    load_intent_model,
-    load_local_qwen,
-    load_exam_database_from_folder,
-    # Shared configuration paths
-    BIO_MODEL_PATH,
-    EXCEL_FOLDER,
-    INTENT_MODEL_PATH
-)
+"""Public interface for the exam-question answering package.
 
-# Load all models and FAQ files once during application startup.
-def init_exam_chat():
-    import sys
-    from .core_code import (
-        exam_question_map, question_answer_map, exam_keywords,
-        intent_classifier, bio_tokenizer, bio_model, bio_id_to_label,
-        qwen_model, qwen_tokenizer
-    )
-    # Expose the initialized resources to subsequent calls.
-    global exam_question_map, question_answer_map, exam_keywords
-    global intent_classifier, bio_tokenizer, bio_model, bio_id_to_label
-    global qwen_model, qwen_tokenizer
+The lightweight demo backend is the default so a fresh clone can be executed
+without private model artifacts. Set ``EXAM_CHAT_MODE=full`` to load the
+original model-backed pipeline.
+"""
 
-    # Load resources in dependency order.
-    print("Loading the Excel knowledge base...")
-    exam_question_map, question_answer_map, exam_keywords = load_exam_database_from_folder(EXCEL_FOLDER)
-    print("Loading the intent classifier...")
-    intent_classifier = load_intent_model()
-    print("Loading the BIO entity-recognition model...")
-    bio_tokenizer, bio_model, bio_id_to_label = load_bio_model()
-    print("Loading the local Qwen model...")
-    qwen_model, qwen_tokenizer = load_local_qwen()
-    print("Core system initialization complete.")
+from __future__ import annotations
 
-# Keep the package-level public API intentionally small.
-__all__ = ["init_exam_chat", "get_answer_from_exam_db"]
+import importlib
+import os
+from types import ModuleType
+
+
+_BACKEND: ModuleType | None = None
+_BACKEND_MODE: str | None = None
+
+
+def get_backend_mode() -> str:
+    """Return the configured backend mode (``demo`` or ``full``)."""
+
+    mode = os.getenv("EXAM_CHAT_MODE", "demo").strip().lower()
+    if mode not in {"demo", "full"}:
+        raise ValueError("EXAM_CHAT_MODE must be either 'demo' or 'full'.")
+    return mode
+
+
+def _get_backend() -> ModuleType:
+    global _BACKEND, _BACKEND_MODE
+
+    mode = get_backend_mode()
+    if _BACKEND is not None and _BACKEND_MODE == mode:
+        return _BACKEND
+
+    module_name = ".demo" if mode == "demo" else ".core_code"
+    _BACKEND = importlib.import_module(module_name, __name__)
+    _BACKEND_MODE = mode
+    return _BACKEND
+
+
+def init_exam_chat() -> None:
+    """Initialize the selected backend."""
+
+    backend = _get_backend()
+    initializer = getattr(backend, "init_demo_chat", None)
+    if initializer is not None:
+        initializer()
+
+
+def get_answer_from_exam_db(user_input: str) -> str:
+    """Route a user query through the selected backend."""
+
+    backend = _get_backend()
+    return backend.get_answer_from_exam_db(user_input)
+
+
+__all__ = ["get_backend_mode", "init_exam_chat", "get_answer_from_exam_db"]
