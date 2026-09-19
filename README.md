@@ -1,9 +1,9 @@
-# Constraint-Aware BIO-NER Pipeline for Vertical-Domain Question Answering
+# Constraint-Aware Chinese Exam Registration Assistant
 
-**A retrieval-first Chinese exam-support assistant for fuzzy, context-dependent registration questions.** It combines BIO-NER, intent routing, conversational context, and exam-scoped FAQ retrieval, invoking a constrained local Qwen model only when curated knowledge cannot answer.
+**A reproducible, retrieval-first NLP system for fuzzy and context-dependent Chinese exam-registration questions.** It combines named-entity recognition (NER) with B–I–O (Begin–Inside–Outside) sequence tagging, intent routing, conversational context, and exam-scoped FAQ retrieval, invoking a constrained local Qwen model only when curated knowledge cannot answer.
 
-[![Syntax check](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/syntax-check.yml)
-[![Reproducible demo](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/reproducible-demo.yml/badge.svg)](https://github.com/Kathryn1206/bio-ner-vertical-qa/actions/workflows/reproducible-demo.yml)
+[![Syntax check](https://github.com/Kathryn1206/chinese-exam-registration-assistant/actions/workflows/syntax-check.yml/badge.svg)](https://github.com/Kathryn1206/chinese-exam-registration-assistant/actions/workflows/syntax-check.yml)
+[![Reproducible demo](https://github.com/Kathryn1206/chinese-exam-registration-assistant/actions/workflows/reproducible-demo.yml/badge.svg)](https://github.com/Kathryn1206/chinese-exam-registration-assistant/actions/workflows/reproducible-demo.yml)
 [![License: research reproduction](https://img.shields.io/badge/license-research%20reproduction-blue.svg)](LICENSE)
 
 <p align="center">
@@ -22,7 +22,7 @@ The main design goal is to reduce hallucination in a high-precision information 
 
 **Research question.** Can a retrieval-first hybrid NLU pipeline improve answer control by resolving entities and intent before allowing a local language model to generate a fallback response?
 
-**Implemented scope.** This repository contains the end-to-end prototype: a domain BIO label scheme and training pipeline, a TF-IDF intent classifier, alias and priority rules, conversational entity carry-over, exam-scoped FAQ matching, a constrained Qwen fallback, and a Flask interface.
+**Implemented scope.** This repository contains the end-to-end prototype: a domain NER label scheme and B–I–O sequence-tagger training pipeline, a TF-IDF intent classifier, alias and priority rules, conversational entity carry-over, exam-scoped FAQ matching, a constrained Qwen fallback, and a Flask interface.
 
 **Evaluation status.** The public demo behavior is reproducible and tested on Python 3.10 and 3.12. No benchmark metric is reported: the original private data and trained artifacts remain excluded, so the internship model's accuracy, entity-level F1, and hallucination-reduction effect are not claimed as publicly reproducible.
 
@@ -32,9 +32,9 @@ The main design goal is to reduce hallucination in a high-precision information 
 |---|---|
 | Integrated NLU and response routing | [`exam_chat_core/core_code.py`](exam_chat_core/core_code.py) |
 | Artifact-free behavioral reproduction | [`exam_chat_core/demo.py`](exam_chat_core/demo.py), [`data/sample_faq.json`](data/sample_faq.json) |
-| BIO-NER data construction and fine-tuning | [`experiments/train_bio_ner.py`](experiments/train_bio_ner.py) |
+| NER sequence-tagger data construction and fine-tuning | [`experiments/train_ner_sequence_tagger.py`](experiments/train_ner_sequence_tagger.py) |
 | Intent data and classifier training | [`experiments/generate_intent_data.py`](experiments/generate_intent_data.py), [`experiments/train_intent_classifier.py`](experiments/train_intent_classifier.py) |
-| Baselines and model probes | [`experiments/zero_shot_intent_baseline.py`](experiments/zero_shot_intent_baseline.py), [`experiments/bio_model_inference_demo.py`](experiments/bio_model_inference_demo.py) |
+| Baselines and model probes | [`experiments/zero_shot_intent_baseline.py`](experiments/zero_shot_intent_baseline.py), [`experiments/ner_sequence_tagger_demo.py`](experiments/ner_sequence_tagger_demo.py) |
 | Local demonstration interface | [`web/web_app.py`](web/web_app.py) |
 | Reproduction protocol and automated checks | [`REPRODUCIBILITY.md`](REPRODUCIBILITY.md), [`tests/`](tests), [demo CI](.github/workflows/reproducible-demo.yml) |
 
@@ -56,8 +56,8 @@ The fastest path uses only Python 3.10 or later—no installation, model downloa
 GPU, or private data is required:
 
 ```bash
-git clone https://github.com/Kathryn1206/bio-ner-vertical-qa.git
-cd bio-ner-vertical-qa
+git clone https://github.com/Kathryn1206/chinese-exam-registration-assistant.git
+cd chinese-exam-registration-assistant
 python -m exam_chat_core.demo --self-test
 python -m exam_chat_core.demo --query "二建什么时候报名？" --json
 ```
@@ -85,7 +85,7 @@ outputs, API verification, scope boundaries, and the full-pipeline path.
 ```mermaid
 flowchart TD
     A["Chinese user query"] --> B["Rule and alias normalization"]
-    B --> C["BERT BIO-NER + intent classifier"]
+    B --> C["BERT NER sequence tagger + intent classifier"]
     C --> D["Context resolution and exam routing"]
     D --> E{"FAQ match found?"}
     E -- Yes --> F["Return verified knowledge-base answer"]
@@ -98,7 +98,7 @@ flowchart TD
 
 | Component | Implementation | Role |
 |---|---|---|
-| Entity recognition | Chinese BERT token classifier with BIO tags | Extracts exam, subject, time, action, constraint, and location information |
+| Entity recognition | Chinese BERT token classifier with B–I–O tags | Extracts exam, subject, time, action, constraint, and location information |
 | Intent classification | TF-IDF bigrams + logistic regression | Identifies common intents such as registration time, entry point, login problems, and registration failures |
 | Rule layer | Alias normalization and keyword-priority rules | Handles domain abbreviations, common phrasing, and high-confidence requests deterministically |
 | Context handling | Previous-exam state | Resolves follow-up questions that omit the exam name |
@@ -121,7 +121,7 @@ This is a prototype rather than a production guarantee. A generative fallback ca
 ## Repository structure
 
 ```text
-bio-ner-vertical-qa/
+chinese-exam-registration-assistant/
 ├── .github/workflows/
 │   ├── syntax-check.yml             # Dependency-free Python syntax CI
 │   └── reproducible-demo.yml        # CLI, UI, and API tests on Python 3.10/3.12
@@ -137,10 +137,10 @@ bio-ner-vertical-qa/
 │   └── web_app.py                   # Flask chat interface
 ├── tests/                            # Deterministic pipeline, UI, and API tests
 ├── experiments/
-│   ├── train_bio_ner.py                  # BIO dataset generation and BERT training
+│   ├── train_ner_sequence_tagger.py      # B–I–O dataset generation and BERT training
 │   ├── train_intent_classifier.py        # Intent-classifier training
 │   ├── generate_intent_data.py           # Synthetic intent-data generation
-│   ├── bio_model_inference_demo.py       # BIO model inference demo
+│   ├── ner_sequence_tagger_demo.py       # NER model inference demo
 │   ├── qwen_inference_demo.py            # Local Qwen inference experiment
 │   ├── zero_shot_intent_baseline.py      # Zero-shot intent baseline
 │   └── integrated_pipeline_prototype.py  # Earlier integrated prototype
@@ -171,8 +171,8 @@ These artifacts are excluded to avoid redistributing internal or third-party dat
 Expected local layout:
 
 ```text
-bio-ner-vertical-qa/
-├── exam_bio_final_model/            # Fine-tuned BERT model and tokenizer
+chinese-exam-registration-assistant/
+├── exam_ner_model/                  # Fine-tuned BERT model and tokenizer
 ├── faq_data/                         # Local .xlsx knowledge-base files
 ├── Qwen/                             # Local Qwen-1.8B model files
 └── experiments/
@@ -195,8 +195,8 @@ The intent classifier, data utilities, and smaller BERT components can run on CP
 ### 2. Clone the repository
 
 ```bash
-git clone https://github.com/Kathryn1206/bio-ner-vertical-qa.git
-cd bio-ner-vertical-qa
+git clone https://github.com/Kathryn1206/chinese-exam-registration-assistant.git
+cd chinese-exam-registration-assistant
 ```
 
 ### 3. Create an isolated Python environment
@@ -244,8 +244,8 @@ The original internship environment was not preserved as a lockfile. `requiremen
 The default configuration expects this layout:
 
 ```text
-bio-ner-vertical-qa/
-├── exam_bio_final_model/
+chinese-exam-registration-assistant/
+├── exam_ner_model/
 │   ├── config.json
 │   ├── tokenizer_config.json
 │   └── model weights
@@ -267,7 +267,7 @@ No configuration is needed when the default layout is used. Otherwise, set any o
 |---|---|---|
 | `EXAM_CHAT_MODE` | `demo` | Uses `demo` for bundled synthetic reproduction or `full` for the model-backed pipeline |
 | `DEMO_FAQ_PATH` | `./data/sample_faq.json` | Optional replacement synthetic-demo fixture |
-| `BIO_MODEL_PATH` | `./exam_bio_final_model` | Fine-tuned BIO-NER model and tokenizer |
+| `NER_MODEL_PATH` | `./exam_ner_model` | Fine-tuned BERT NER model and tokenizer |
 | `FAQ_DATA_DIR` | `./faq_data` | Directory containing FAQ `.xlsx` files |
 | `INTENT_MODEL_PATH` | `./experiments/intent_model.pkl` | Serialized intent classifier |
 | `QWEN_MODEL_PATH` | `./Qwen` | Local Qwen model directory |
@@ -281,7 +281,7 @@ The repository includes [`.env.example`](.env.example) as a safe configuration r
 macOS or Linux example:
 
 ```bash
-export BIO_MODEL_PATH=/absolute/path/to/exam_bio_final_model
+export NER_MODEL_PATH=/absolute/path/to/exam_ner_model
 export FAQ_DATA_DIR=/absolute/path/to/faq_data
 export INTENT_MODEL_PATH=/absolute/path/to/intent_model.pkl
 export QWEN_MODEL_PATH=/absolute/path/to/Qwen
@@ -290,7 +290,7 @@ export QWEN_MODEL_PATH=/absolute/path/to/Qwen
 Windows PowerShell example:
 
 ```powershell
-$env:BIO_MODEL_PATH = "D:\models\exam_bio_final_model"
+$env:NER_MODEL_PATH = "D:\models\exam_ner_model"
 $env:FAQ_DATA_DIR = "D:\data\faq_data"
 $env:INTENT_MODEL_PATH = "D:\models\intent_model.pkl"
 $env:QWEN_MODEL_PATH = "D:\models\Qwen"
@@ -308,7 +308,7 @@ python -m compileall -q exam_chat_core experiments web
 Check the default artifact layout:
 
 ```bash
-python -c "from pathlib import Path; required=['exam_bio_final_model','faq_data','Qwen','experiments/intent_model.pkl']; missing=[p for p in required if not Path(p).exists()]; assert not missing, f'Missing artifacts: {missing}'; print('Artifact layout OK')"
+python -c "from pathlib import Path; required=['exam_ner_model','faq_data','Qwen','experiments/intent_model.pkl']; missing=[p for p in required if not Path(p).exists()]; assert not missing, f'Missing artifacts: {missing}'; print('Artifact layout OK')"
 ```
 
 On an NVIDIA machine, verify that PyTorch can access CUDA:
@@ -366,10 +366,10 @@ python experiments/generate_intent_data.py
 python experiments/train_intent_classifier.py
 ```
 
-Train the BIO token classifier:
+Train the BERT NER sequence tagger:
 
 ```bash
-python experiments/train_bio_ner.py
+python experiments/train_ner_sequence_tagger.py
 ```
 
 The included generators use template-based synthetic examples. For research-grade evaluation, replace or supplement them with independently annotated data and report entity-level precision, recall, and F1 on a held-out test set.
