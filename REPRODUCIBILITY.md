@@ -13,7 +13,7 @@ as public experimental evidence.
 | Deterministic CLI demo | Python 3.10+ and `data/sample_faq.json` | Alias routing, intent routing, context carry-over, scoped FAQ retrieval, and safe fallback | Fully reproducible |
 | Flask demo and API | Locked dependencies in `requirements-demo.lock` | Browser UI and `/api/chat` responses backed by the same synthetic fixture | Fully reproducible and CI-tested |
 | Synthetic intent training | Template generator and public Python packages | A new TF-IDF + logistic-regression classifier | Re-runnable; generated model may vary with library/platform details |
-| Synthetic BIO training | Generated BIO examples and `bert-base-chinese` | A newly fine-tuned token classifier | Re-runnable with network access and suitable compute; not bitwise reproducible |
+| Synthetic NER training | Generated B–I–O-labelled examples and `bert-base-chinese` | A newly fine-tuned token classifier | Re-runnable with network access and suitable compute; not bitwise reproducible |
 | Original internship system | Private FAQ files and original trained artifacts | Historical end-to-end behavior | Not publicly reproducible because those artifacts are excluded |
 
 The public demo reproduces control flow, not the original model outputs or an
@@ -23,8 +23,8 @@ contains no current dates or URLs.
 ## 1. Clone and verify the dependency-free CLI
 
 ```bash
-git clone https://github.com/Kathryn1206/bio-ner-vertical-qa.git
-cd bio-ner-vertical-qa
+git clone https://github.com/Kathryn1206/chinese-exam-registration-assistant.git
+cd chinese-exam-registration-assistant
 python -m exam_chat_core.demo --self-test
 ```
 
@@ -119,7 +119,7 @@ The full backend is opt-in:
 EXAM_CHAT_MODE=full python web/web_app.py
 ```
 
-It requires the separately supplied BIO checkpoint, intent classifier, FAQ
+It requires the separately supplied NER checkpoint, intent classifier, FAQ
 workbooks, and Qwen files documented in the main README. A successful demo run
 does not imply that these excluded artifacts are present.
 

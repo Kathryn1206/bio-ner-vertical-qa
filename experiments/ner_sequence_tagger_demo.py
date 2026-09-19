@@ -20,8 +20,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # 2. Load the trained model and tokenizer
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 model_path = os.getenv(
-    "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
-)  # Trained BIO model directory
+    "NER_MODEL_PATH", str(PROJECT_ROOT / "exam_ner_model")
+)  # Trained BERT NER model directory
 tokenizer = BertTokenizer.from_pretrained(model_path)
 model = BertForTokenClassification.from_pretrained(model_path)
 model = model.to(device)
@@ -81,6 +81,6 @@ if __name__ == "__main__":
     
     chars, pred_labels = predict_long_text(test_sentence)
     print(f"\nTest sentence: {test_sentence}")
-    print("BIO labels:")
+    print("B–I–O labels:")
     for char, label in zip(chars, pred_labels):
         print(f"{char}\t{label}")

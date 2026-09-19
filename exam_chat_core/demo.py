@@ -3,7 +3,7 @@
 This module mirrors the public pipeline stages with synthetic FAQ data:
 alias normalization, intent routing, conversational exam carry-over, scoped
 retrieval, and a bounded unsupported-query response. It intentionally does not
-claim to reproduce the private internship data, trained BIO model, or Qwen
+claim to reproduce the private internship data, trained NER model, or Qwen
 outputs.
 """
 

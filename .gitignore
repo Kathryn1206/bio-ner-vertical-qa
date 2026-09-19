@@ -9,9 +9,9 @@ env/
 Qwen/
 models/
 checkpoints/
-exam_bio_model/
-exam_bio_final_model/
-exam_bio_logs/
+exam_ner_checkpoints/
+exam_ner_model/
+exam_ner_logs/
 *.pkl
 *.joblib
 *.pt
@@ -23,7 +23,6 @@ exam_bio_logs/
 # Raw or private data
 faq_data/
 data/raw/
-BIO人民日报训练集.txt
 intent_data.csv
 
 # Secrets

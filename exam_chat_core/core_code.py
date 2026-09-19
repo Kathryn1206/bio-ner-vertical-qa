@@ -14,8 +14,8 @@ LAST_EXAM = None   # Conversation state for resolving omitted exam references.
 warnings.filterwarnings("ignore")
 # 1. Configuration
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-BIO_MODEL_PATH = os.getenv(
-    "BIO_MODEL_PATH", str(PROJECT_ROOT / "exam_bio_final_model")
+NER_MODEL_PATH = os.getenv(
+    "NER_MODEL_PATH", str(PROJECT_ROOT / "exam_ner_model")
 )
 EXCEL_FOLDER = os.getenv("FAQ_DATA_DIR", str(PROJECT_ROOT / "faq_data"))
 INTENT_MODEL_PATH = os.getenv(
@@ -31,22 +31,22 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 USE_FIXED_REPLY_FOR_UNANSWERED = False
 
 
-# 2.1. BIO entity-recognition model
-def load_bio_model():
+# 2.1. BERT NER sequence tagger
+def load_ner_model():
     labels = ['O', 'B-EXAM', 'I-EXAM', 'B-SUBJECT', 'I-SUBJECT',
         'B-TIME', 'I-TIME', 'B-ACTION', 'I-ACTION',
         'B-CONSTRAINT', 'I-CONSTRAINT', 'B-CITY', 'I-CITY']
     id_to_label = {i: label for i, label in enumerate(labels)}
     
     # Load the locally trained tokenizer and token classifier.
-    tokenizer = BertTokenizer.from_pretrained(BIO_MODEL_PATH)
-    model = BertForTokenClassification.from_pretrained(BIO_MODEL_PATH)
+    tokenizer = BertTokenizer.from_pretrained(NER_MODEL_PATH)
+    model = BertForTokenClassification.from_pretrained(NER_MODEL_PATH)
     model = model.to(DEVICE)
     model.eval()
     
     return tokenizer, model, id_to_label
 
-bio_tokenizer, bio_model, bio_id_to_label = load_bio_model()
+ner_tokenizer, ner_model, ner_id_to_label = load_ner_model()
 
 # 2.2. Intent classifier
 def load_intent_model():
@@ -403,7 +403,7 @@ def normalize_exam(exam_query):
     return exam_query
 
 def extract_entities(user_input):
-    """Extract and merge rule-based and BIO-model entities from a query."""
+    """Extract and merge rule-based and B–I–O-tagged NER entities."""
     entities = {"EXAM": "", "ACTION": "", "CONSTRAINT": "", "CITY": "", "TIME": ""}
     
     # 1. Rule-based city matching
@@ -428,16 +428,16 @@ def extract_entities(user_input):
 
     # 3. BERT token classification
     text_chars = list(user_input)
-    encoded = bio_tokenizer(text_chars, is_split_into_words=True, return_tensors='pt', padding='max_length', truncation=True, max_length=510).to(DEVICE)
+    encoded = ner_tokenizer(text_chars, is_split_into_words=True, return_tensors='pt', padding='max_length', truncation=True, max_length=510).to(DEVICE)
     with torch.no_grad():
-        outputs = bio_model(**encoded)
+        outputs = ner_model(**encoded)
         pred_ids = torch.argmax(outputs.logits, dim=-1).squeeze().cpu().tolist()
-        bio_labels = [bio_id_to_label[id] for id in pred_ids][1:len(text_chars)+1]
+        sequence_labels = [ner_id_to_label[id] for id in pred_ids][1:len(text_chars)+1]
     
-    # 4. Decode BIO tags
+    # 4. Decode B–I–O sequence labels
     current_type, current_val = None, ""
     model_entities = {}
-    for char, label in zip(text_chars, bio_labels):
+    for char, label in zip(text_chars, sequence_labels):
         if label.startswith("B-"):
             if current_type: model_entities[current_type] = current_val
             current_type, current_val = label.split("-")[1], char

@@ -100,7 +100,7 @@ def process_long_text(long_text, long_labels=None, max_length=510):
             })
 
     
-    # Convert BIO labels to training IDs.
+    # Convert B–I–O labels to training IDs.
     if long_labels is not None:
          for idx, label_chunk in enumerate(label_chunks):
             label_ids = [label_to_id[l] for l in label_chunk]
@@ -129,8 +129,8 @@ def predict_long_text(long_text, max_length = 510):
 
 
 
-# Generate character-level BIO labels for synthetic exam questions.
-def bio_tag_sentence(sentence, entities):
+# Generate character-level B–I–O labels for synthetic exam questions.
+def tag_sentence(sentence, entities):
     labels = []
     i = 0
     while i < len(sentence):
@@ -179,13 +179,13 @@ def generate_dataset():
                             (constraint, "CONSTRAINT")
                         ]
 
-                        labels = bio_tag_sentence(sentence, entities)
+                        labels = tag_sentence(sentence, entities)
                         dataset.append((sentence, labels))
 
     return dataset
 
-# Dataset wrapper for the chunked text and BIO-label format.
-class ExamBIODataset(Dataset):
+# Dataset wrapper for chunked text and B–I–O sequence labels.
+class ExamSequenceTaggingDataset(Dataset):
     def __init__(self, data, tokenizer, label_to_id, max_length=510):
         self.data = data  # Expected format: [(sentence, labels), ...]
         self.tokenizer = tokenizer
@@ -243,10 +243,10 @@ def compute_metrics(eval_pred):
         "f1_weighted": report["weighted avg"]["f1-score"]
     }
 
-# Train and save the BIO token classifier.
+# Train and save the BERT NER sequence tagger.
 def train_model():
-    # 1. Generate the synthetic BIO dataset.
-    print("===== Generating the exam-question BIO dataset =====")
+    # 1. Generate the synthetic B–I–O-labelled dataset.
+    print("===== Generating the exam-question NER dataset =====")
     raw_dataset = generate_dataset()
     random.Random(SEED).shuffle(raw_dataset)
     print(f"Dataset size: {len(raw_dataset)}")
@@ -258,17 +258,17 @@ def train_model():
     val_data = raw_dataset[train_size:]
     
     # 3. Build dataset objects.
-    train_dataset = ExamBIODataset(train_data, tokenizer, label_to_id, max_length)
-    val_dataset = ExamBIODataset(val_data, tokenizer, label_to_id, max_length)
+    train_dataset = ExamSequenceTaggingDataset(train_data, tokenizer, label_to_id, max_length)
+    val_dataset = ExamSequenceTaggingDataset(val_data, tokenizer, label_to_id, max_length)
     
     # 4. Configure training.
     training_args = TrainingArguments(
-        output_dir=str(PROJECT_ROOT / "exam_bio_model"),  # Intermediate checkpoints
+        output_dir=str(PROJECT_ROOT / "exam_ner_checkpoints"),
         num_train_epochs=10,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=8,
         learning_rate=2e-5,
-        logging_dir=str(PROJECT_ROOT / "exam_bio_logs"),
+        logging_dir=str(PROJECT_ROOT / "exam_ner_logs"),
         logging_steps=50,
         evaluation_strategy="epoch",
         save_strategy="epoch",
@@ -299,7 +299,7 @@ def train_model():
     
     # 6. Save the final model.
     print("===== Training complete; saving the model =====")
-    final_model_dir = PROJECT_ROOT / "exam_bio_final_model"
+    final_model_dir = PROJECT_ROOT / "exam_ner_model"
     model.save_pretrained(final_model_dir)
     tokenizer.save_pretrained(final_model_dir)
     print(f"Training seed: {SEED}")
@@ -308,7 +308,7 @@ def train_model():
     test_sentence = "今年英语四级报名截止时间是什么"
     chars, pred_labels = predict_long_text(test_sentence)
     print(f"\nTest sentence: {test_sentence}")
-    print("BIO labels:")
+    print("B–I–O labels:")
     for char, label in zip(chars, pred_labels):
         print(f"{char}\t{label}")
 
